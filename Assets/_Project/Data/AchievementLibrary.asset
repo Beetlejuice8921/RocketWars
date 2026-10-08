@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8926783bdfa927f45b632c33fcd17bf1, type: 3}
+  m_Name: AchievementLibrary
+  m_EditorClassIdentifier: Assembly-CSharp::RocketWars.Stats.AchievementLibrary
+  achievements:
+  - {fileID: 11400000, guid: 5babd09d937363441a8aca04d5069d05, type: 2}
+  - {fileID: 11400000, guid: 4f3adab5ced02f14db5af515094a097a, type: 2}
+  - {fileID: 11400000, guid: e263763da26c7b346a6ac9d1dd3da479, type: 2}
+  - {fileID: 11400000, guid: 5046b85f65cc4574a8651c39e6e2f915, type: 2}
+  - {fileID: 11400000, guid: 8596bf57f1090834a9c1e48a45d98b2f, type: 2}
+  - {fileID: 11400000, guid: b93886c03d4d7a348aea07a6318ca54e, type: 2}

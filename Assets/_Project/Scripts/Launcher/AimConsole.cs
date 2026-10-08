@@ -1,0 +1,452 @@
+using System.Collections.Generic;
+using RocketWars.Core;
+using RocketWars.Net;
+using RocketWars.Player;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace RocketWars.Launcher
+{
+    /// <summary>
+    /// Пульт наведения у шахты. X — старт/стоп горизонтальной линии (ходит сверху вниз и обратно),
+    /// Y — старт/стоп вертикальной (слева направо и обратно). Когда обе линии остановлены — их пересечение
+    /// становится целью и загорается Launch.
+    /// Маяк из ящика: у его владельца (и только у него — экран пульта рисуется у каждого свой) на карте мигают вражеские шахты.
+    /// </summary>
+    public class AimConsole : MonoBehaviour
+    {
+        /// <summary>Сколько полных проходов по экрану в секунду делает линия.</summary>
+        public const float LineSpeed = 0.45f;
+        const float PixelSize = 0.0025f;
+        const float CanvasW = 400f, CanvasH = 330f;
+
+        static readonly Color ScreenBg = new Color(0.86f, 0.86f, 0.86f);
+        static readonly Color ButtonBg = new Color(0.2f, 0.18f, 0.06f);
+        static readonly Color XColor = new Color(1f, 0.85f, 0.1f);
+        static readonly Color YColor = new Color(0.2f, 0.95f, 0.2f);
+        static readonly Color LaunchColor = new Color(0.95f, 0.1f, 0.1f);
+        static readonly Color DisabledColor = new Color(0.35f, 0.35f, 0.35f);
+        // метки маяка мигают жёлтым/белым в чёрной рамке — заметны и на красном, и на зелёном острове
+        static readonly Color BeaconColor = new Color(1f, 0.85f, 0.1f);
+        static readonly Color BeaconBlink = Color.white;
+
+        public const ulong NoOperator = ulong.MaxValue;
+        /// <summary>Сколько секунд пульт закреплён за последним нажавшим игроком.</summary>
+        public const float OperatorLockTime = 8f;
+
+        const byte FlagXRunning = 1, FlagXSet = 2, FlagYRunning = 4, FlagYSet = 8;
+
+        public RocketSilo Silo { get; private set; }
+        public bool XRunning { get; private set; }
+        public bool XSet { get; private set; }
+        public bool YRunning { get; private set; }
+        public bool YSet { get; private set; }
+        public ulong Operator { get; private set; } = NoOperator;
+
+        // Фазы линий зафиксированы в момент последнего нажатия (_stamp), дальше считаются по общему времени —
+        // одинаково на сервере и всех клиентах без постоянной синхронизации.
+        float _xPhase0, _yPhase0;
+        double _stamp, _lastPress;
+
+        float XPhase => _xPhase0 + (XRunning ? LineSpeed * (float)(NetClock.Now - _stamp) : 0f);
+        float YPhase => _yPhase0 + (YRunning ? LineSpeed * (float)(NetClock.Now - _stamp) : 0f);
+
+        /// <summary>Позиция горизонтальной линии (0 — низ экрана, 1 — верх).</summary>
+        public float V => 1f - Mathf.PingPong(XPhase, 1f);
+        /// <summary>Позиция вертикальной линии (0 — лево, 1 — право).</summary>
+        public float U => Mathf.PingPong(YPhase, 1f);
+        public bool HasTarget => XSet && YSet && !XRunning && !YRunning;
+        public bool CanLaunch => HasTarget && Silo.State == SiloState.Ready;
+
+        Text _status;
+        Image _statusBg;
+        RawImage _map;
+        RectTransform _mapArea, _mapRt, _hLine, _vLine, _marker;
+        GameObject _warning, _beaconBanner;
+        Text _beaconText;
+        readonly List<Image> _beaconMarks = new List<Image>();
+        ConsoleButton[] _buttons;
+        Texture _layoutFor;
+        static Font _font;
+
+        /// <summary>Пультом сейчас пользуется другой игрок.</summary>
+        public bool IsLockedFor(ulong clientId) =>
+            Operator != NoOperator && Operator != clientId && Silo.State == SiloState.Ready &&
+            (XRunning || XSet || YRunning || YSet) && NetClock.Now - _lastPress < OperatorLockTime;
+
+        public bool IsInteractable(ConsoleButtonKind kind) =>
+            MatchManager.ConsolesEnabled && Silo.State == SiloState.Ready && !IsLockedFor(NetClock.LocalClientId) &&
+            (kind != ConsoleButtonKind.Launch || CanLaunch);
+
+        /// <summary>Локальный игрок нажал кнопку — запрос уходит на сервер.</summary>
+        public void RequestPress(ConsoleButtonKind kind)
+        {
+            if (NetworkPlayer.LocalPlayer == null)
+                return;
+            Sfx.PlayAt(Sfx.Click, transform.position, 0.6f, 20f);
+            NetworkPlayer.LocalPlayer.PressConsole(Silo.NetIndex, kind);
+        }
+
+        /// <summary>Сервер: применить нажатие.</summary>
+        public void ServerPress(ConsoleButtonKind kind, NetworkPlayer presser)
+        {
+            ulong clientId = presser.OwnerClientId;
+            if (!MatchManager.ConsolesEnabled || Silo.State != SiloState.Ready || IsLockedFor(clientId))
+                return;
+
+            // фиксируем текущие фазы перед сменой режима
+            _xPhase0 = XPhase;
+            _yPhase0 = YPhase;
+            _stamp = NetClock.Now;
+
+            switch (kind)
+            {
+                case ConsoleButtonKind.X:
+                    XSet = XRunning;
+                    XRunning = !XRunning;
+                    break;
+                case ConsoleButtonKind.Y:
+                    YSet = YRunning;
+                    YRunning = !YRunning;
+                    break;
+                case ConsoleButtonKind.Launch:
+                    if (!CanLaunch)
+                        return;
+                    var target = ResolveTarget(out bool hasGround);
+                    if (Silo.ServerLaunch(target, hasGround, presser.gameObject, presser.Health.Team))
+                    {
+                        ResetAim();
+                        return;
+                    }
+                    break;
+            }
+
+            Operator = clientId;
+            _lastPress = NetClock.Now;
+        }
+
+        void ResetAim()
+        {
+            _xPhase0 = XPhase;
+            _yPhase0 = YPhase;
+            _stamp = NetClock.Now;
+            XRunning = YRunning = XSet = YSet = false;
+            Operator = NoOperator;
+        }
+
+        public SiloSync ToSync() => new SiloSync
+        {
+            ConsoleFlags = (byte)((XRunning ? FlagXRunning : 0) | (XSet ? FlagXSet : 0) | (YRunning ? FlagYRunning : 0) | (YSet ? FlagYSet : 0)),
+            XPhase0 = _xPhase0,
+            YPhase0 = _yPhase0,
+            Stamp = _stamp,
+            Operator = Operator,
+            LastPress = _lastPress
+        };
+
+        public void ApplySync(in SiloSync sync)
+        {
+            XRunning = (sync.ConsoleFlags & FlagXRunning) != 0;
+            XSet = (sync.ConsoleFlags & FlagXSet) != 0;
+            YRunning = (sync.ConsoleFlags & FlagYRunning) != 0;
+            YSet = (sync.ConsoleFlags & FlagYSet) != 0;
+            _xPhase0 = sync.XPhase0;
+            _yPhase0 = sync.YPhase0;
+            _stamp = sync.Stamp;
+            Operator = sync.Operator;
+            _lastPress = sync.LastPress;
+        }
+
+        public Vector3 TargetFlat => TacticalMap.Instance != null
+            ? TacticalMap.Instance.ScreenToWorld(Silo.Team, new Vector2(U, V))
+            : Silo.transform.position;
+
+        /// <summary>Точка попадания: луч сверху вниз в точке прицела. Нет попадания — цель в пустоте.</summary>
+        public Vector3 ResolveTarget(out bool hasGround)
+        {
+            Vector3 flat = TargetFlat;
+            float baseY = Silo.Island != null ? Silo.Island.transform.position.y : 0f;
+            var ray = new Ray(new Vector3(flat.x, baseY + 200f, flat.z), Vector3.down);
+            // нос стоящей в шахте ракеты не считается целью — ракета бьёт в крышу шахты, как раньше
+            hasGround = false;
+            float best = float.MaxValue;
+            Vector3 point = default;
+            foreach (var hit in Physics.RaycastAll(ray, 400f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                if (hit.distance >= best || RocketSilo.IsLoadedRocket(hit.collider))
+                    continue;
+                best = hit.distance;
+                point = hit.point;
+                hasGround = true;
+            }
+            return hasGround ? point : new Vector3(flat.x, baseY, flat.z);
+        }
+
+        public bool TargetOnOwnIsland()
+        {
+            if (!HasTarget || TacticalMap.Instance == null)
+                return false;
+            var island = TacticalMap.Instance.IslandAt(TargetFlat, out _);
+            return island != null && island.Team == Silo.Team;
+        }
+
+        void Update()
+        {
+            if (Silo.IsAuthority && Silo.State == SiloState.Destroyed && (XRunning || YRunning || XSet || YSet))
+                ResetAim();
+            RefreshUi();
+        }
+
+        // ---------- UI ----------
+
+        void RefreshUi()
+        {
+            switch (Silo.State)
+            {
+                case SiloState.Ready when !MatchManager.ConsolesEnabled:
+                    SetStatus("WAITING", new Color(0.45f, 0.45f, 0.5f));
+                    break;
+                case SiloState.Ready when IsLockedFor(NetClock.LocalClientId):
+                    SetStatus("BUSY", new Color(0.3f, 0.45f, 0.9f));
+                    break;
+                case SiloState.Ready:
+                    SetStatus(CanLaunch ? "READY — LAUNCH!" : "READY", new Color(0.1f, 0.85f, 0.1f));
+                    break;
+                case SiloState.Launching:
+                    SetStatus("LAUNCH!", Mathf.Repeat(Time.time, 0.5f) < 0.25f ? LaunchColor : new Color(0.5f, 0.05f, 0.05f));
+                    break;
+                case SiloState.Reloading:
+                    SetStatus($"IN PROGRESS… {Mathf.CeilToInt(Silo.ReloadLeft)}", new Color(0.95f, 0.55f, 0.1f));
+                    break;
+                default:
+                    SetStatus("DESTROYED", new Color(0.15f, 0.15f, 0.15f));
+                    break;
+            }
+
+            var map = TacticalMap.Instance;
+            var tex = map != null ? map.GetTexture(Silo.Team, withSilos: false) : null; // на пульте точки шахт не нужны
+            if (tex != _layoutFor)
+                LayoutMap(tex);
+
+            bool showH = XRunning || XSet, showV = YRunning || YSet;
+            _hLine.gameObject.SetActive(showH);
+            _vLine.gameObject.SetActive(showV);
+            _hLine.anchorMin = new Vector2(0f, V);
+            _hLine.anchorMax = new Vector2(1f, V);
+            _vLine.anchorMin = new Vector2(U, 0f);
+            _vLine.anchorMax = new Vector2(U, 1f);
+            _marker.gameObject.SetActive(HasTarget);
+            _marker.anchorMin = _marker.anchorMax = new Vector2(U, V);
+            _warning.SetActive(TargetOnOwnIsland());
+            UpdateBeacon(map);
+
+            var hovered = PlayerInteractor.Local != null ? PlayerInteractor.Local.Hovered : null;
+            foreach (var b in _buttons)
+            {
+                Color c = b.Kind == ConsoleButtonKind.Launch ? (b.IsInteractable ? LaunchColor : DisabledColor) : ButtonBg;
+                bool running = (b.Kind == ConsoleButtonKind.X && XRunning) || (b.Kind == ConsoleButtonKind.Y && YRunning);
+                if (running) c = Color.Lerp(c, Color.white, 0.25f);
+                if (!b.IsInteractable && b.Kind != ConsoleButtonKind.Launch) c = Color.Lerp(c, DisabledColor, 0.6f);
+                if (b == hovered && b.IsInteractable) c = Color.Lerp(c, Color.white, 0.35f);
+                b.Background.color = c;
+            }
+        }
+
+        /// <summary>Маяк локального игрока: мигающие метки вражеских шахт и таймер над картой.</summary>
+        void UpdateBeacon(TacticalMap map)
+        {
+            var me = NetworkPlayer.LocalPlayer;
+            float left = me != null && me.Health != null && me.Health.Team == Silo.Team ? me.BeaconTimeLeft : 0f;
+            int used = 0;
+            if (left > 0f && map != null)
+            {
+                var color = Mathf.Repeat(Time.time, 0.6f) < 0.4f ? BeaconColor : BeaconBlink;
+                foreach (var enemy in RocketSilo.All)
+                {
+                    if (enemy.Team == Silo.Team || enemy.State == SiloState.Destroyed)
+                        continue;
+                    if (used == _beaconMarks.Count)
+                    {
+                        var frame = Line(_mapRt, "BeaconMark", Color.black, new Vector2(14f, 14f));
+                        var inner = Line(frame, "Fill", BeaconColor, new Vector2(9f, 9f));
+                        inner.anchorMin = inner.anchorMax = new Vector2(0.5f, 0.5f);
+                        _beaconMarks.Add(inner.GetComponent<Image>());
+                    }
+                    var mark = _beaconMarks[used++];
+                    var markRt = (RectTransform)mark.transform.parent;
+                    markRt.gameObject.SetActive(true);
+                    mark.color = color;
+                    markRt.anchorMin = markRt.anchorMax = map.WorldToScreen(Silo.Team, enemy.transform.position);
+                }
+            }
+            for (int i = used; i < _beaconMarks.Count; i++)
+                _beaconMarks[i].transform.parent.gameObject.SetActive(false);
+
+            _beaconBanner.SetActive(left > 0f);
+            if (left > 0f)
+                _beaconText.text = $"МАЯК: шахты врага · {Mathf.CeilToInt(left)} с";
+        }
+
+        void SetStatus(string text, Color bg)
+        {
+            _status.text = text;
+            _statusBg.color = bg;
+        }
+
+        void LayoutMap(Texture tex)
+        {
+            _layoutFor = tex;
+            _map.texture = tex;
+            if (tex == null)
+                return;
+            Vector2 area = _mapArea.sizeDelta;
+            float aspect = tex.width / (float)tex.height;
+            Vector2 size = area.x / area.y > aspect ? new Vector2(area.y * aspect, area.y) : new Vector2(area.x, area.x / aspect);
+            var rt = _map.rectTransform;
+            rt.sizeDelta = size;
+            rt.anchoredPosition = (area - size) * 0.5f;
+        }
+
+        // ---------- построение ----------
+
+        public static AimConsole Create(RocketSilo silo)
+        {
+            // стойка с экраном в 2.4 м от центра шахты, экран смотрит наружу
+            var root = new GameObject("AimConsole");
+            root.transform.SetParent(silo.transform, false);
+            root.transform.localPosition = new Vector3(2.4f, 0f, 0f);
+            root.transform.localRotation = Quaternion.LookRotation(Vector3.left);
+
+            var gray = new Color(0.75f, 0.75f, 0.75f);
+            RuntimeMaterials.VisualPrimitive(PrimitiveType.Cube, root.transform, new Vector3(0f, 0.6f, 0.15f), new Vector3(0.1f, 1.2f, 0.1f), gray);
+
+            var head = new GameObject("Head").transform;
+            head.SetParent(root.transform, false);
+            head.localPosition = new Vector3(0f, 1.3f, 0f);
+            head.localRotation = Quaternion.Euler(25f, 0f, 0f);
+            RuntimeMaterials.VisualPrimitive(PrimitiveType.Cube, head, new Vector3(0f, 0f, 0.035f),
+                new Vector3(CanvasW * PixelSize + 0.06f, CanvasH * PixelSize + 0.06f, 0.05f), new Color(0.95f, 0.95f, 0.95f));
+
+            var console = root.AddComponent<AimConsole>();
+            console.Silo = silo;
+            console.BuildCanvas(head);
+            return console;
+        }
+
+        void BuildCanvas(Transform head)
+        {
+            if (_font == null)
+                _font = GameFonts.Pixel;
+
+            var canvasGo = new GameObject("Screen", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+            var canvasRt = (RectTransform)canvasGo.transform;
+            canvasRt.SetParent(head, false);
+            canvasRt.sizeDelta = new Vector2(CanvasW, CanvasH);
+            canvasRt.localScale = Vector3.one * PixelSize;
+            canvasGo.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
+            canvasGo.GetComponent<CanvasScaler>().dynamicPixelsPerUnit = 3f;
+
+            var root = Rect(canvasRt, "Bg", Vector2.zero, new Vector2(CanvasW, CanvasH));
+            Img(root, ScreenBg);
+
+            var statusRt = Rect(root, "Status", new Vector2(10, 288), new Vector2(380, 34));
+            _statusBg = Img(statusRt, Color.green);
+            _status = Txt(statusRt, "READY", 16, Color.white); // размеры — под широкий пиксельный шрифт
+
+            _mapArea = Rect(root, "MapArea", new Vector2(10, 92), new Vector2(380, 190));
+            Img(_mapArea, new Color(0.45f, 0.45f, 0.47f));
+            var mapRt = Rect(_mapArea, "Map", Vector2.zero, _mapArea.sizeDelta);
+            _map = mapRt.gameObject.AddComponent<RawImage>();
+            _mapRt = mapRt;
+
+            _hLine = Line(mapRt, "HLine", XColor, new Vector2(0f, 3f));
+            _vLine = Line(mapRt, "VLine", YColor, new Vector2(3f, 0f));
+            _marker = Line(mapRt, "Marker", Color.black, new Vector2(9f, 9f));
+
+            var warnRt = Rect(mapRt, "Warning", Vector2.zero, Vector2.zero);
+            warnRt.anchorMin = new Vector2(0f, 0f);
+            warnRt.anchorMax = new Vector2(1f, 0.2f);
+            warnRt.sizeDelta = Vector2.zero;
+            Img(warnRt, new Color(0.6f, 0f, 0f, 0.75f));
+            Txt(warnRt, "ЦЕЛЬ НА СВОЁМ ОСТРОВЕ!", 12, Color.white);
+            _warning = warnRt.gameObject;
+
+            var beaconRt = Rect(mapRt, "Beacon", Vector2.zero, Vector2.zero);
+            beaconRt.anchorMin = new Vector2(0f, 0.84f);
+            beaconRt.anchorMax = new Vector2(1f, 1f);
+            beaconRt.sizeDelta = Vector2.zero;
+            Img(beaconRt, new Color(0.55f, 0.3f, 0f, 0.6f)); // полупрозрачно: метки рисуются поверх
+            _beaconText = Txt(beaconRt, "", 12, Color.white);
+            _beaconBanner = beaconRt.gameObject;
+            _beaconBanner.SetActive(false);
+
+            _buttons = new[]
+            {
+                MakeButton(root, ConsoleButtonKind.X, new Vector2(10, 10), "—", "X", XColor),
+                MakeButton(root, ConsoleButtonKind.Y, new Vector2(140, 10), "|", "Y", YColor),
+                MakeButton(root, ConsoleButtonKind.Launch, new Vector2(270, 10), "▲", "LAUNCH", Color.black),
+            };
+
+            RefreshUi();
+        }
+
+        ConsoleButton MakeButton(RectTransform parent, ConsoleButtonKind kind, Vector2 pos, string icon, string label, Color iconColor)
+        {
+            var rt = Rect(parent, $"Btn_{kind}", pos, new Vector2(120, 72));
+            var bg = Img(rt, ButtonBg);
+            var iconText = Txt(rt, icon, 32, iconColor);
+            iconText.rectTransform.offsetMin = new Vector2(0, 24);
+            // подпись (X / Y / LAUNCH) крупно и чуть выше нижнего края кнопки
+            var labelText = Txt(rt, label, 16, Color.white);
+            labelText.alignment = TextAnchor.LowerCenter;
+            labelText.rectTransform.offsetMin = new Vector2(0, 8);
+            return ConsoleButton.Attach(rt.gameObject, this, kind, bg);
+        }
+
+        static RectTransform Rect(Transform parent, string name, Vector2 pos, Vector2 size)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(parent, false);
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = Vector2.zero;
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            return rt;
+        }
+
+        static RectTransform Line(RectTransform parent, string name, Color color, Vector2 size)
+        {
+            var rt = Rect(parent, name, Vector2.zero, size);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            Img(rt, color);
+            return rt;
+        }
+
+        static Image Img(RectTransform rt, Color color)
+        {
+            var img = rt.gameObject.AddComponent<Image>();
+            img.color = color;
+            img.raycastTarget = false;
+            return img;
+        }
+
+        static Text Txt(RectTransform parent, string text, int size, Color color)
+        {
+            var rt = Rect(parent, "Text", Vector2.zero, Vector2.zero);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+            var t = rt.gameObject.AddComponent<Text>();
+            t.font = _font;
+            t.text = text;
+            t.fontSize = size;
+            t.color = color;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            t.verticalOverflow = VerticalWrapMode.Overflow;
+            t.raycastTarget = false;
+            return t;
+        }
+    }
+}

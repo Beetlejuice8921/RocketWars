@@ -1,0 +1,818 @@
+/* Шрифт — пиксельный Press Start 2P (моноширинный, широкий): размеры подобраны под него. */
+/* Rocket Wars — интерфейс (UI Toolkit). Палитра: светлое небо, белый «пиксельный» текст с тенью, команды красные/зелёные. */
+
+.root {
+    flex-grow: 1;
+    color: rgb(255, 255, 255);
+    font-size: 14px;
+}
+
+.layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.shadow {
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+.hidden {
+    display: none;
+}
+
+/* ---------- панели и кнопки ---------- */
+
+.panel {
+    background-color: rgba(28, 32, 40, 0.88);
+    border-radius: 10px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.15);
+    padding: 24px 28px;
+}
+
+.title {
+    font-size: 35px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin-bottom: 12px;
+}
+
+.section {
+    font-size: 11px;
+    color: rgb(170, 182, 200);
+    margin-top: 18px;
+    margin-bottom: 6px;
+    -unity-font-style: bold;
+}
+
+.row {
+    flex-direction: row;
+    align-items: center;
+}
+
+.grow {
+    flex-grow: 1;
+}
+
+.btn {
+    height: 44px;
+    margin: 4px;
+    padding: 0 18px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    background-color: rgb(58, 66, 82);
+    border-width: 0;
+    border-radius: 6px;
+}
+
+.btn:hover {
+    background-color: rgb(78, 90, 110);
+}
+
+.btn:active {
+    background-color: rgb(40, 46, 58);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+}
+
+.btn-primary {
+    background-color: rgb(46, 150, 70);
+}
+
+.btn-primary:hover {
+    background-color: rgb(60, 175, 88);
+}
+
+.btn-danger {
+    background-color: rgb(170, 48, 44);
+}
+
+.btn-danger:hover {
+    background-color: rgb(196, 62, 56);
+}
+
+.btn-small {
+    height: 34px;
+    font-size: 10px;
+    padding: 0 12px;
+}
+
+.field {
+    font-size: 12px;
+    margin: 4px;
+}
+
+.field > .unity-base-text-field__input {
+    background-color: rgb(20, 24, 30);
+    color: rgb(255, 255, 255);
+    border-color: rgba(255, 255, 255, 0.2);
+    min-height: 36px;
+    -unity-text-align: middle-left;
+}
+
+.label-dim {
+    color: rgb(170, 182, 200);
+    font-size: 11px;
+}
+
+.status {
+    color: rgb(255, 196, 120);
+    font-size: 11px;
+    white-space: normal;
+    margin-top: 10px;
+}
+
+.list {
+    min-height: 60px;
+    max-height: 190px;
+    background-color: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    margin: 4px;
+}
+
+.list-item {
+    flex-direction: row;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.list-item > Label {
+    flex-grow: 1;
+    font-size: 11px;
+}
+
+/* ---------- главное меню ---------- */
+
+.menu-screen {
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(10, 14, 20, 0.35);
+}
+
+.menu-panel {
+    width: 760px;
+}
+
+/* ---------- HUD ---------- */
+
+.hud {
+    padding: 0;
+}
+
+.score {
+    position: absolute;
+    top: 14px;
+    left: 0;
+    right: 0;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.score-num {
+    font-size: 40px;
+    -unity-font-style: bold;
+    width: 110px;
+    -unity-text-align: middle-center;
+}
+
+.score-round {
+    font-size: 32px;
+    -unity-font-style: bold;
+    width: 360px;
+    -unity-text-align: middle-center;
+}
+
+.team0 {
+    color: rgb(225, 40, 36);
+}
+
+.team1 {
+    color: rgb(40, 210, 80);
+}
+
+/* лента событий матча (как в Counter-Strike) */
+.feed {
+    position: absolute;
+    right: 20px;
+    top: 230px;
+    align-items: flex-end;
+}
+
+.feed-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 4px;
+    padding: 3px 10px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    border-width: 2px;
+    border-color: rgba(0, 0, 0, 0);
+}
+
+.feed-me {
+    border-color: rgb(230, 60, 50);
+    background-color: rgba(40, 0, 0, 0.6);
+}
+
+.feed-name {
+    font-size: 12px;
+    -unity-font-style: bold;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.feed-icon {
+    width: 36px;
+    height: 22px;
+    margin: 0 8px;
+}
+
+/* маркер попадания из пистолета */
+/* маркер попадания: точка привязки в центре экрана, штрихи 6×18 по диагоналям (позиции и поворот задаёт код) */
+.hitmarker {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+}
+
+.hm-bar {
+    position: absolute;
+    width: 6px;
+    height: 18px;
+    background-color: rgb(255, 255, 255);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.6);
+}
+
+/* вид в бинокль */
+.bino-line-h {
+    position: absolute;
+    left: 38%;
+    right: 38%;
+    top: 50%;
+    height: 2px;
+    background-color: rgba(20, 20, 20, 0.75);
+}
+
+.bino-line-v {
+    position: absolute;
+    top: 42%;
+    bottom: 42%;
+    left: 50%;
+    width: 2px;
+    background-color: rgba(20, 20, 20, 0.75);
+}
+
+.bino-tick {
+    position: absolute;
+    top: 49%;
+    width: 2px;
+    height: 2%;
+    background-color: rgba(20, 20, 20, 0.75);
+}
+
+.bino-zoom {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 120px;
+    margin-left: -60px;
+    -unity-text-align: middle-center;
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.bino-distance {
+    position: absolute;
+    left: 50%;
+    top: 62%;
+    width: 320px;
+    margin-left: -160px;
+    -unity-text-align: middle-center;
+    font-size: 16px;
+    -unity-font-style: bold;
+    color: rgb(255, 214, 90);
+}
+
+/* оптика снайперки */
+.scope-line-h {
+    position: absolute;
+    left: 20%;
+    right: 20%;
+    top: 50%;
+    height: 2px;
+    margin-top: -1px;
+    background-color: rgba(10, 10, 10, 0.9);
+}
+
+.scope-line-v {
+    position: absolute;
+    top: 6%;
+    bottom: 6%;
+    left: 50%;
+    width: 2px;
+    margin-left: -1px;
+    background-color: rgba(10, 10, 10, 0.9);
+}
+
+.scope-post-l {
+    position: absolute;
+    left: 20%;
+    width: 18%;
+    top: 50%;
+    height: 8px;
+    margin-top: -4px;
+    background-color: rgb(10, 10, 10);
+}
+
+.scope-post-r {
+    position: absolute;
+    right: 20%;
+    width: 18%;
+    top: 50%;
+    height: 8px;
+    margin-top: -4px;
+    background-color: rgb(10, 10, 10);
+}
+
+.scope-post-b {
+    position: absolute;
+    left: 50%;
+    width: 8px;
+    margin-left: -4px;
+    top: 72%;
+    bottom: 0;
+    background-color: rgb(10, 10, 10);
+}
+
+.scope-dot {
+    position: absolute;
+    left: 50%;
+    width: 8px;
+    height: 4px;
+    margin-left: -4px;
+    margin-top: -2px;
+    background-color: rgb(10, 10, 10);
+}
+
+.scope-center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    margin-top: -2px;
+    background-color: rgb(255, 50, 40);
+}
+
+.scope-zoom {
+    position: absolute;
+    left: 53%;
+    top: 30%;
+    -unity-text-align: middle-left;
+    font-size: 16px;
+    -unity-font-style: bold;
+}
+
+.scope-distance {
+    position: absolute;
+    left: 53%;
+    top: 34%;
+    -unity-text-align: middle-left;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: rgb(255, 214, 90);
+}
+
+/* край каски в приседе: выезжает сверху экрана */
+.helmet-brim {
+    position: absolute;
+    left: -6%;
+    right: -6%;
+    top: 0;
+    height: 17%;
+}
+
+.helmet-shell {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgb(74, 84, 48);
+    border-bottom-left-radius: 900px;
+    border-bottom-right-radius: 900px;
+}
+
+.helmet-band {
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: 26%;
+    height: 9%;
+    background-color: rgba(0, 0, 0, 0.18);
+    border-radius: 60px;
+}
+
+.helmet-lip {
+    position: absolute;
+    left: 2%;
+    right: 2%;
+    bottom: 0;
+    height: 14%;
+    background-color: rgb(46, 52, 30);
+    border-bottom-left-radius: 900px;
+    border-bottom-right-radius: 900px;
+}
+
+.protection {
+    top: 18%;
+    font-size: 17px;
+    color: rgb(150, 235, 140);
+}
+
+.crosshair {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    margin-left: -9px;
+    margin-top: -9px;
+}
+
+.crosshair-h,
+.crosshair-v {
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.crosshair-h {
+    left: 0;
+    right: 0;
+    top: 8px;
+    height: 2px;
+}
+
+.crosshair-v {
+    top: 0;
+    bottom: 0;
+    left: 8px;
+    width: 2px;
+}
+
+.hp {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    width: 560px;
+    margin-left: -280px;
+    height: 62px;
+    border-width: 4px;
+    border-color: rgb(255, 255, 255);
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.hp-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgb(235, 20, 20);
+}
+
+.hp-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 25px;
+    -unity-font-style: bold;
+}
+
+/* броня из бронежилета: синяя полоса над полосой здоровья */
+.armor {
+    position: absolute;
+    bottom: 104px;
+    left: 50%;
+    width: 560px;
+    margin-left: -280px;
+    height: 26px;
+    border-width: 3px;
+    border-color: rgb(200, 220, 255);
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.armor-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgb(40, 110, 235);
+}
+
+.armor-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    -unity-text-align: middle-center;
+    font-size: 11px;
+    -unity-font-style: bold;
+}
+
+/* патроны пулемёта справа внизу */
+.ammo {
+    position: absolute;
+    right: 40px;
+    bottom: 40px;
+    font-size: 21px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    color: rgb(255, 225, 120);
+}
+
+/* что выпало из ящика */
+.loot {
+    top: 63%;
+    font-size: 19px;
+    color: rgb(255, 215, 90);
+}
+
+/* маяк: вражеские шахты видны на пульте */
+.beacon {
+    top: 12%;
+    font-size: 15px;
+    color: rgb(255, 120, 90);
+}
+
+.center-text {
+    position: absolute;
+    left: 0;
+    right: 0;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+}
+
+.banner {
+    top: 26%;
+    font-size: 37px;
+}
+
+.subbanner {
+    top: 35%;
+    font-size: 17px;
+}
+
+.countdown {
+    bottom: 13%;
+    font-size: 93px;
+}
+
+.downed {
+    top: 30%;
+    font-size: 26px;
+}
+
+.falling {
+    top: 40%;
+    font-size: 25px;
+}
+
+.prompt {
+    top: 54%;
+    font-size: 14px;
+}
+
+.progress {
+    position: absolute;
+    top: 59%;
+    left: 50%;
+    width: 300px;
+    margin-left: -150px;
+    height: 14px;
+    background-color: rgba(0, 0, 0, 0.45);
+    border-radius: 4px;
+}
+
+.progress-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: rgb(80, 200, 255);
+    border-radius: 4px;
+}
+
+/* ник над игроком: мелко, без плашки, по центру над головой (точка привязки — низ надписи) */
+.nametag {
+    position: absolute;
+    width: 300px;
+    height: 16px;
+    margin-left: -150px;
+    margin-top: -16px;
+    -unity-text-align: lower-center;
+    font-size: 12px;
+}
+
+/* лежащий союзник: плашка HELP!, расстояние и вылетающие вверх копии надписи (точка привязки — 0×0) */
+.help {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.help-badge {
+    position: absolute;
+    left: -105px;
+    top: -38px;
+    width: 210px;
+    height: 76px;
+    background-color: rgba(220, 30, 30, 0.92);
+    border-width: 3px;
+    border-color: rgb(255, 255, 255);
+    border-radius: 12px;
+    -unity-text-align: middle-center;
+    font-size: 29px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+}
+
+.help-dist {
+    position: absolute;
+    left: -105px;
+    top: 42px;
+    width: 210px;
+    -unity-text-align: upper-center;
+    font-size: 14px;
+    -unity-font-style: bold;
+}
+
+.help-rise {
+    position: absolute;
+    left: -140px;
+    top: -84px;
+    width: 280px;
+    height: 56px;
+    -unity-text-align: middle-center;
+    font-size: 25px;
+    -unity-font-style: bold;
+    color: rgb(255, 80, 60);
+}
+
+.info {
+    position: absolute;
+    left: 24px;
+    top: 120px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.room-code {
+    position: absolute;
+    left: 24px;
+    top: 20px;
+    font-size: 12px;
+    -unity-font-style: bold;
+}
+
+.minimap {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 300px;
+    height: 190px;
+    border-width: 4px;
+    border-color: rgb(200, 200, 200);
+    background-color: rgb(118, 118, 122);
+}
+
+.minimap-me {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    margin-top: -5px;
+    background-color: rgb(40, 110, 255);
+    border-width: 1px;
+    border-color: rgb(255, 255, 255);
+}
+
+/* ---------- лобби / пауза / результаты ---------- */
+
+.overlay {
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(10, 14, 20, 0.45);
+}
+
+.lobby-panel {
+    position: absolute;
+    top: 150px;
+    left: 50%;
+    width: 640px;
+    margin-left: -320px;
+    align-items: center;
+}
+
+.results-panel {
+    width: 1840px;
+    max-height: 90%;
+}
+
+.results-columns {
+    flex-direction: row;
+}
+
+.results-team {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin: 6px;
+}
+
+.results-team-title {
+    font-size: 20px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin-bottom: 6px;
+}
+
+.results-row {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.results-header {
+    color: rgb(170, 182, 200);
+}
+
+.results-header > Label {
+    font-size: 10px;
+}
+
+.results-me {
+    background-color: rgba(80, 140, 255, 0.18);
+}
+
+.col-name {
+    flex-grow: 1;
+    font-size: 12px;
+    overflow: hidden;
+}
+
+.col-num {
+    width: 84px;
+    -unity-text-align: middle-center;
+    font-size: 12px;
+}
+
+.col-badges {
+    width: 176px;
+    flex-direction: row;
+}
+
+.badge {
+    width: 27px;
+    height: 27px;
+    margin: 1px;
+    border-radius: 14px;
+    -unity-text-align: middle-center;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: rgb(20, 20, 20);
+}
+
+.tooltip {
+    position: absolute;
+    max-width: 340px;
+    padding: 8px 12px;
+    background-color: rgb(20, 24, 30);
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    font-size: 10px;
+    white-space: normal;
+}
+
+.tooltip-title {
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}

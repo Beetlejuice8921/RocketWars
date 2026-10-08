@@ -1,0 +1,716 @@
+using System.Collections.Generic;
+using RocketWars.Combat;
+using RocketWars.Core;
+using RocketWars.Launcher;
+using RocketWars.Loot;
+using RocketWars.Net;
+using RocketWars.Player;
+using RocketWars.Stats;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace RocketWars.UI
+{
+    /// <summary>
+    /// HUD в игре: счёт «1 | ROUND 2 | 2», отсчёт и баннеры, полоса HP, лежит/падение, подъём союзника,
+    /// подсказка пульта, метки HELP! над лежащими союзниками (видны сквозь стены), мини-карта, разминка,
+    /// броня над полосой HP, патроны пулемёта, ящики с припасами и маяк.
+    /// </summary>
+    public class HudView
+    {
+        const float GoTime = 0.8f;
+
+        readonly VisualElement _screen, _score, _crosshair, _hp, _hpFill, _progress, _progressFill, _sosLayer;
+        readonly VisualElement _minimap, _minimapMe, _helmetBrim, _binoculars, _scope;
+        readonly Label _scopeDistance;
+        readonly Label _protection, _binoDistance;
+        // маркер попадания: четыре пиксельных штриха по диагоналям вокруг прицела
+        readonly VisualElement _hitMarker;
+        readonly VisualElement[] _hitBars = new VisualElement[4];
+        static readonly Color HitColor = Color.white, KillColor = new Color(1f, 0.2f, 0.15f);
+        readonly Image _minimapImage;
+        readonly Label _score0, _score1, _round, _banner, _subbanner, _countdown, _hpText;
+        readonly Label _downed, _falling, _prompt, _info, _roomCode;
+        readonly VisualElement _armor, _armorFill;
+        readonly Label _armorText, _ammo, _loot, _beacon;
+        const float LootToastTime = 3f;
+        float _lootTime = -10f;
+        NetworkPlayer _lootSource;
+        readonly List<HelpMarker> _helpPool = new List<HelpMarker>();
+
+        // ники над головами: только в прямой видимости, союзники — дальше, противники — ближе
+        const float AllyNameRange = 60f, EnemyNameRange = 35f;
+        const float NameHeight = 2.5f;
+        readonly VisualElement _nameLayer;
+        readonly List<Label> _namePool = new List<Label>();
+
+        // лента событий (справа вверху, под мини-картой)
+        const float FeedLifetime = 6f;
+        const float FeedFade = 1f;
+        const int FeedMax = 6;
+        readonly VisualElement _feed;
+        readonly List<(VisualElement row, float time)> _feedRows = new List<(VisualElement, float)>();
+
+        public HudView(VisualElement root)
+        {
+            _screen = Ui.El(root, "layer", "hud");
+            _screen.pickingMode = PickingMode.Ignore;
+
+            // ники над игроками — под метками HELP!
+            _nameLayer = Ui.El(_screen, "layer");
+            _nameLayer.pickingMode = PickingMode.Ignore;
+
+            _sosLayer = Ui.El(_screen, "layer");
+            _sosLayer.pickingMode = PickingMode.Ignore;
+
+            // край каски сверху экрана в приседе (под счётом и прицелом)
+            _helmetBrim = Ui.El(_screen, "helmet-brim");
+            Ui.El(_helmetBrim, "helmet-shell");
+            Ui.El(_helmetBrim, "helmet-band");
+            Ui.El(_helmetBrim, "helmet-lip");
+
+            // вид в бинокль: маска двух окуляров, сетка, дальномер
+            _binoculars = Ui.El(_screen, "layer", "binoculars");
+            var mask = new Image { image = BuildBinocularMask(), scaleMode = ScaleMode.StretchToFill };
+            mask.AddToClassList("layer");
+            _binoculars.Add(mask);
+            Ui.El(_binoculars, "bino-line-h");
+            Ui.El(_binoculars, "bino-line-v");
+            for (int i = -4; i <= 4; i++)
+            {
+                if (i == 0) continue;
+                var tick = Ui.El(_binoculars, "bino-tick");
+                tick.style.left = Length.Percent(50f + i * 3f);
+            }
+            Ui.Text(_binoculars, "×5", "bino-zoom", "shadow");
+            _binoDistance = Ui.Text(_binoculars, "", "bino-distance", "shadow");
+
+            // оптика снайперки: один круглый окуляр, тонкое перекрестие с толстыми «пеньками» по краям, метки
+            _scope = Ui.El(_screen, "layer", "binoculars");
+            var scopeMask = new Image { image = BuildScopeMask(), scaleMode = ScaleMode.StretchToFill };
+            scopeMask.AddToClassList("layer");
+            _scope.Add(scopeMask);
+            Ui.El(_scope, "scope-line-h");
+            Ui.El(_scope, "scope-line-v");
+            Ui.El(_scope, "scope-post-l");
+            Ui.El(_scope, "scope-post-r");
+            Ui.El(_scope, "scope-post-b");
+            for (int i = 1; i <= 4; i++)
+            {
+                var dot = Ui.El(_scope, "scope-dot");
+                dot.style.top = Length.Percent(50f + i * 4f);
+            }
+            Ui.El(_scope, "scope-center");
+            Ui.Text(_scope, "×4", "scope-zoom", "shadow");
+            _scopeDistance = Ui.Text(_scope, "", "scope-distance", "shadow");
+
+            _crosshair = Ui.El(_screen, "crosshair");
+            Ui.El(_crosshair, "crosshair-h");
+            Ui.El(_crosshair, "crosshair-v");
+            _hitMarker = Ui.El(_screen, "hitmarker");
+            for (int i = 0; i < 4; i++)
+            {
+                // штрих в 45° от центра в каждую четверть: (±1, ±1)
+                float sx = i % 2 == 0 ? -1f : 1f, sy = i < 2 ? -1f : 1f;
+                var bar = Ui.El(_hitMarker, "hm-bar");
+                bar.style.left = sx * 15f - 3f;
+                bar.style.top = sy * 15f - 9f;
+                bar.style.rotate = new Rotate(sx * sy > 0 ? -45f : 45f);
+                _hitBars[i] = bar;
+            }
+
+            _score = Ui.El(_screen, "score");
+            _score0 = Ui.Text(_score, "0 |", "score-num", "team0", "shadow");
+            _round = Ui.Text(_score, "ROUND 1", "score-round", "shadow");
+            _score1 = Ui.Text(_score, "| 0", "score-num", "team1", "shadow");
+
+            _roomCode = Ui.Text(_screen, "", "room-code", "shadow");
+            _info = Ui.Text(_screen, "", "info", "shadow");
+
+            _minimap = Ui.El(_screen, "minimap");
+            _minimapImage = new Image { scaleMode = ScaleMode.StretchToFill };
+            _minimapImage.style.flexGrow = 1;
+            _minimap.Add(_minimapImage);
+            _minimapMe = Ui.El(_minimap, "minimap-me");
+
+            _feed = Ui.El(_screen, "feed");
+            KillFeed.Received += OnFeed;
+
+            _banner = Ui.Text(_screen, "", "center-text", "banner", "shadow");
+            _subbanner = Ui.Text(_screen, "", "center-text", "subbanner", "shadow");
+            _countdown = Ui.Text(_screen, "", "center-text", "countdown", "shadow");
+            _downed = Ui.Text(_screen, "ВЫ ЛЕЖИТЕ — ждите союзника", "center-text", "downed", "shadow");
+            _falling = Ui.Text(_screen, "", "center-text", "falling", "shadow");
+            _prompt = Ui.Text(_screen, "", "center-text", "prompt", "shadow");
+            _protection = Ui.Text(_screen, "ЗАЩИТА ПОВЫШЕНА · урон -33%", "center-text", "protection", "shadow");
+
+            _progress = Ui.El(_screen, "progress");
+            _progressFill = Ui.El(_progress, "progress-fill");
+
+            _hp = Ui.El(_screen, "hp");
+            _hpFill = Ui.El(_hp, "hp-fill");
+            _hpText = Ui.Text(_hp, "100", "hp-text", "shadow");
+
+            _armor = Ui.El(_screen, "armor");
+            _armorFill = Ui.El(_armor, "armor-fill");
+            _armorText = Ui.Text(_armor, "", "armor-text", "shadow");
+            _ammo = Ui.Text(_screen, "", "ammo", "shadow");
+            _loot = Ui.Text(_screen, "", "center-text", "loot", "shadow");
+            _beacon = Ui.Text(_screen, "", "center-text", "beacon", "shadow");
+
+            foreach (var e in _screen.Query<VisualElement>().ToList())
+                e.pickingMode = PickingMode.Ignore;
+            Ui.Show(_screen, false);
+        }
+
+        public void SetVisible(bool visible) => Ui.Show(_screen, visible);
+
+        public void Dispose()
+        {
+            KillFeed.Received -= OnFeed;
+            WatchLoot(null);
+        }
+
+        /// <summary>Подписка на «что выпало из ящика» у текущего локального игрока.</summary>
+        void WatchLoot(NetworkPlayer me)
+        {
+            if (_lootSource == me)
+                return;
+            if (_lootSource != null)
+                _lootSource.LootReceived -= OnLoot;
+            _lootSource = me;
+            if (me != null)
+                me.LootReceived += OnLoot;
+        }
+
+        static string LootName(LootKind kind) => kind switch
+        {
+            LootKind.MachineGun => "ПУЛЕМЁТ",
+            LootKind.Sniper => "СНАЙПЕРКА",
+            LootKind.Bazooka => "БАЗУКА",
+            LootKind.Armor => "БРОНЕЖИЛЕТ",
+            LootKind.Beacon => "МАЯК",
+            _ => "АПТЕЧКИ",
+        };
+
+        void OnLoot(LootKind kind)
+        {
+            _loot.text = kind switch
+            {
+                LootKind.MachineGun => $"ПУЛЕМЁТ · {MachineGunSpec.Ammo} патронов",
+                LootKind.Sniper => $"СНАЙПЕРКА · {SniperSpec.Ammo} патрона · ПКМ - прицел ×4",
+                LootKind.Bazooka => $"БАЗУКА · {BazookaSpec.Ammo} заряда · осторожно, задевает своих",
+                LootKind.Armor => $"БРОНЕЖИЛЕТ · +{PlayerHealth.MaxArmor:0} брони",
+                LootKind.Beacon => "МАЯК · вражеские шахты видны на пульте",
+                _ => $"АПТЕЧКИ ×{LootCrate.MedkitCount} · E — вылечиться",
+            };
+            _lootTime = Time.time;
+        }
+
+        /// <summary>Новая строка ленты: «кто [иконка] кого», цвета команд, свои события подсвечены рамкой.</summary>
+        void OnFeed(FeedEntry e)
+        {
+            var row = Ui.El(_feed, "feed-row");
+            row.pickingMode = PickingMode.Ignore;
+            ulong me = NetworkPlayer.LocalPlayer != null ? NetworkPlayer.LocalPlayer.NetworkObjectId : ulong.MaxValue - 1;
+            if (e.ActorId == me || e.TargetId == me)
+                row.AddToClassList("feed-me");
+
+            if (!string.IsNullOrEmpty(e.Actor))
+                Ui.Text(row, e.Actor, "feed-name", e.ActorTeam == 0 ? "team0" : "team1");
+            var icon = new Image { image = KillFeed.Icon(e.Kind), scaleMode = ScaleMode.ScaleToFit };
+            icon.AddToClassList("feed-icon");
+            row.Add(icon);
+            Ui.Text(row, e.Target, "feed-name", e.TargetTeam == 0 ? "team0" : "team1");
+            foreach (var child in row.Children())
+                child.pickingMode = PickingMode.Ignore;
+
+            _feedRows.Add((row, Time.unscaledTime));
+            while (_feedRows.Count > FeedMax)
+            {
+                _feedRows[0].row.RemoveFromHierarchy();
+                _feedRows.RemoveAt(0);
+            }
+        }
+
+        void UpdateFeed()
+        {
+            float now = Time.unscaledTime;
+            for (int i = _feedRows.Count - 1; i >= 0; i--)
+            {
+                float age = now - _feedRows[i].time;
+                if (age > FeedLifetime)
+                {
+                    _feedRows[i].row.RemoveFromHierarchy();
+                    _feedRows.RemoveAt(i);
+                    continue;
+                }
+                _feedRows[i].row.style.opacity = Mathf.Clamp01((FeedLifetime - age) / FeedFade);
+            }
+            // лента под мини-картой, высота которой зависит от карты
+            _feed.style.top = Ui.IsShown(_minimap) ? _minimap.layout.yMax + 12f : 20f;
+        }
+
+        /// <summary>Крупные надписи прячутся, пока открыта пауза или итоги.</summary>
+        public void SetBannersHidden(bool hidden)
+        {
+            Ui.Show(_banner, !hidden);
+            Ui.Show(_subbanner, !hidden);
+        }
+
+        public void Update()
+        {
+            var me = NetworkPlayer.LocalPlayer;
+            var health = me != null ? me.Health : null;
+            WatchLoot(me);
+
+            UpdateMatch(health);
+            UpdatePlayer(me, health);
+            UpdateNames(me, health);
+            UpdateSos(health);
+            UpdateMinimap(me, health);
+            UpdateFeed();
+
+            var session = SessionService.Current;
+            _roomCode.text = session != null ? $"Код комнаты: {session.Code}" : "";
+        }
+
+        void UpdateMatch(PlayerHealth health)
+        {
+            var match = MatchManager.Instance;
+            bool hasMatch = match != null && match.IsSpawned;
+            var s = hasMatch ? match.State : default;
+            int myTeam = health != null ? health.Team : -1;
+
+            Ui.Show(_score, hasMatch && s.Phase != MatchPhase.Lobby);
+            _score0.text = $"{s.Score0} |";
+            _score1.text = $"| {s.Score1}";
+            _round.text = $"ROUND {s.Round}";
+
+            string banner = "", sub = "", countdown = "";
+            Color bannerColor = Color.white;
+            if (hasMatch)
+            {
+                switch (s.Phase)
+                {
+                    case MatchPhase.Lobby:
+                        banner = "РАЗМИНКА";
+                        sub = LobbyText(match);
+                        break;
+                    case MatchPhase.Countdown:
+                        countdown = $"{Mathf.Max(1, Mathf.CeilToInt((float)(s.PhaseEnd - NetClock.Now)))}...";
+                        break;
+                    case MatchPhase.Round:
+                        if (NetClock.Now - s.PhaseEnd < GoTime)
+                            countdown = "GO!";
+                        break;
+                    case MatchPhase.RoundEnd:
+                        banner = s.Winner < 0 ? "НИЧЬЯ" : $"РАУНД ВЫИГРАЛИ {RuntimeMaterials.TeamName(s.Winner)}";
+                        sub = s.Winner < 0 ? "раунд переигрывается" : "";
+                        if (s.Winner >= 0) bannerColor = RuntimeMaterials.TeamColor(s.Winner);
+                        break;
+                    case MatchPhase.MatchEnd:
+                        banner = myTeam < 0 ? $"ПОБЕДИЛИ {RuntimeMaterials.TeamName(s.Winner)}" : myTeam == s.Winner ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
+                        bannerColor = RuntimeMaterials.TeamColor(s.Winner);
+                        sub = match.IsServer ? "Enter — новый матч, Tab — итоги" : "Tab — итоги";
+                        break;
+                }
+            }
+
+            _banner.text = banner;
+            _banner.style.color = bannerColor;
+            _subbanner.text = sub;
+            _countdown.text = countdown;
+        }
+
+        static string LobbyText(MatchManager match)
+        {
+            int n0 = 0, n1 = 0;
+            foreach (var p in PlayerHealth.All)
+                if (p.IsSpawned)
+                {
+                    if (p.Team == 0) n0++;
+                    else n1++;
+                }
+            string teams = $"{RuntimeMaterials.TeamName(0)}: {n0}   ·   {RuntimeMaterials.TeamName(1)}: {n1}";
+            if (!match.IsServer)
+                return $"{teams}\nМатч начнёт хост";
+            return $"{teams}\n{match.StartBlocker() ?? "Enter — начать матч"}";
+        }
+
+        void UpdatePlayer(NetworkPlayer me, PlayerHealth health)
+        {
+            bool alive = health != null && !health.IsDowned;
+            Ui.Show(_hp, health != null);
+            Ui.Show(_crosshair, alive);
+            Ui.Show(_downed, health != null && health.IsDowned);
+
+            if (health != null)
+            {
+                float k = health.Hp / PlayerHealth.MaxHp;
+                _hpFill.style.width = Length.Percent(k * 100f);
+                _hpText.text = Mathf.CeilToInt(health.Hp).ToString();
+            }
+            UpdateLoot(me, health);
+
+            var fall = me != null ? me.GetComponent<FallRespawn>() : null;
+            _falling.text = fall != null && fall.IsFalling ? $"Падение… {fall.TimeLeft:0.0}" : "";
+
+            // подъём союзника важнее подсказки пульта
+            var revive = me != null ? me.GetComponent<ReviveInteraction>() : null;
+            var interactor = PlayerInteractor.Local;
+            string prompt = "";
+            bool showProgress = false;
+            if (revive != null && revive.Target != null)
+            {
+                prompt = revive.IsReviving ? $"Поднимаем {revive.Target.DisplayName}…" : $"Удерживайте E — поднять {revive.Target.DisplayName}";
+                showProgress = true;
+                _progressFill.style.width = Length.Percent(revive.Progress01 * 100f);
+            }
+            else if (me != null && me.GetComponent<RocketRider>() is RocketRider rider && (rider.IsRiding || rider.HasGrabTarget))
+            {
+                prompt = rider.IsRiding ? "Отпустите E — отцепиться от ракеты"
+                    : rider.TargetFull ? "На ракете нет места (4 из 4)"
+                    : "Удерживайте E — схватиться за ракету";
+            }
+            else if (me != null && me.ParachuteOpen)
+            {
+                prompt = "Пробел — отстегнуть парашют";
+            }
+            else if (me != null && me.GetComponent<CrateInteraction>() is CrateInteraction crates && crates.Target != null)
+            {
+                var crate = crates.Target;
+                if (crate.State == CrateState.Closed)
+                {
+                    prompt = crates.IsOpening ? "Открываем ящик…" : "Удерживайте E — открыть ящик";
+                    showProgress = true;
+                    _progressFill.style.width = Length.Percent(crates.Progress01 * 100f);
+                }
+                else if (crate.HasItem)
+                {
+                    prompt = $"E - взять: {LootName(crate.Kind)}";
+                }
+                else
+                {
+                    prompt = health != null && health.Hp >= PlayerHealth.MaxHp
+                        ? $"Аптечек в ящике: {crate.Medkits} · здоровье полное"
+                        : $"E — аптечка +{LootCrate.MedkitHeal:0} HP (в ящике: {crate.Medkits})";
+                }
+            }
+            else if (me != null && me.GetComponent<FlagInteraction>() is FlagInteraction flags && flags.Target != null)
+            {
+                prompt = $"E - забрать флаг {RuntimeMaterials.TeamNameGenitive(flags.Target.Team)}";
+            }
+            else if (interactor != null && interactor.Hovered != null)
+            {
+                var b = interactor.Hovered;
+                string name = b.Kind == ConsoleButtonKind.Launch ? "LAUNCH" : b.Kind.ToString();
+                prompt = b.IsInteractable ? $"ЛКМ — нажать {name}"
+                    : b.Console.IsLockedFor(NetClock.LocalClientId) ? "Пультом пользуется другой игрок"
+                    : !MatchManager.ConsolesEnabled ? "Пульты включатся в начале раунда"
+                    : $"{name} недоступна";
+            }
+            _prompt.text = prompt;
+            Ui.Show(_progress, showProgress);
+            UpdateHelmet(me, health);
+
+            if (health == null)
+            {
+                _info.text = "";
+                return;
+            }
+
+            int ready = 0, reloading = 0, alivesilos = 0;
+            float nextReload = float.MaxValue;
+            foreach (var silo in RocketSilo.All)
+            {
+                if (silo.Team != health.Team || silo.State == SiloState.Destroyed)
+                    continue;
+                alivesilos++;
+                if (silo.State == SiloState.Ready) ready++;
+                if (silo.State == SiloState.Reloading)
+                {
+                    reloading++;
+                    nextReload = Mathf.Min(nextReload, silo.ReloadLeft);
+                }
+            }
+            string reload = reloading > 0 ? $" · перезарядка: {reloading} (ближайшая {Mathf.CeilToInt(nextReload)} с)" : "";
+            _info.text = $"Команда: {RuntimeMaterials.TeamName(health.Team)}\nШахт: {alivesilos} · готово: {ready}{reload}\n" +
+                         "Tab — итоги · Esc — пауза";
+        }
+
+        /// <summary>Броня над полосой HP, патроны пулемёта, что выпало из ящика, таймер маяка.</summary>
+        void UpdateLoot(NetworkPlayer me, PlayerHealth health)
+        {
+            float armor = health != null ? health.Armor : 0f;
+            Ui.Show(_armor, armor > 0f);
+            // у берсерка брони 200 — полоса считается от неё, а не от бронежилета (100)
+            float armorMax = Mathf.Max(PlayerHealth.MaxArmor, me != null && me.IsBerserk ? BerserkSpec.Armor : 0f);
+            _armorFill.style.width = Length.Percent(Mathf.Clamp01(armor / armorMax) * 100f);
+            _armorText.text = $"БРОНЯ {Mathf.CeilToInt(armor)}";
+
+            var weapon = me != null ? me.GetComponent<PistolView>() : null;
+            bool gold = weapon != null && weapon.HoldingGoldGuns && health != null && !health.IsDowned;
+            bool gun = !gold && weapon != null && weapon.HoldingMachineGun && health != null && !health.IsDowned;
+            bool sniper = !gold && weapon != null && weapon.HoldingSniper && health != null && !health.IsDowned;
+            bool bazooka = !gold && weapon != null && weapon.HoldingBazooka && health != null && !health.IsDowned;
+            Ui.Show(_ammo, gun || gold || sniper || bazooka);
+            if (gold)
+                _ammo.text = "ЗОЛОТЫЕ ПУЛЕМЁТЫ  БЕЗ ЛИМИТА";
+            else if (sniper)
+                _ammo.text = $"СНАЙПЕРКА  {weapon.SniperAmmo} / {SniperSpec.Ammo}";
+            else if (bazooka)
+                _ammo.text = $"БАЗУКА  {weapon.BazookaAmmo} / {BazookaSpec.Ammo}";
+            else if (gun)
+                _ammo.text = $"ПУЛЕМЁТ  {weapon.MachineGunAmmo} / {MachineGunSpec.Ammo}";
+
+            float since = Time.time - _lootTime;
+            Ui.Show(_loot, since < LootToastTime);
+            _loot.style.opacity = Mathf.Clamp01((LootToastTime - since) / 0.5f);
+
+            float beacon = me != null ? me.BeaconTimeLeft : 0f;
+            var carrying = me != null ? me.GetComponent<FlagInteraction>() : null;
+            bool flag = carrying != null && carrying.Carrying != null;
+            bool berserk = me != null && me.IsBerserk;
+            Ui.Show(_beacon, beacon > 0f || flag || berserk);
+            _beacon.text = flag
+                ? $"ВЫ НЕСЁТЕ ФЛАГ {RuntimeMaterials.TeamNameGenitive(carrying.Carrying.Team)} - доставьте его на свой остров"
+                : berserk
+                    ? (me.InBerserkTransform ? "ПРЕВРАЩЕНИЕ В БЕРСЕРКА!" : $"РЕЖИМ БЕРСЕРКА - {Mathf.CeilToInt(me.BerserkTimeLeft)} с")
+                    : $"МАЯК: вражеские шахты на пульте - {Mathf.CeilToInt(beacon)} с";
+        }
+
+        /// <summary>В приседе сверху опускается край каски и выводится, что защита повышена.</summary>
+        void UpdateHelmet(NetworkPlayer me, PlayerHealth health)
+        {
+            // бинокль у глаз: маска окуляров вместо прицела и каски
+            var bino = me != null ? me.GetComponent<Binoculars>() : null;
+            float b = bino != null ? bino.Amount : 0f;
+            bool scope = bino != null && bino.IsScope;
+            Ui.Show(_binoculars, b > 0.01f && !scope);
+            _binoculars.style.opacity = b;
+            Ui.Show(_scope, b > 0.01f && scope);
+            _scope.style.opacity = b;
+            string distance = bino != null && bino.Distance > 0f ? $"ДИСТ {bino.Distance:0} м" : "ДИСТ —";
+            _binoDistance.text = distance;
+            _scopeDistance.text = distance;
+            if (b > 0.5f)
+                Ui.Show(_crosshair, false);
+
+            // маркер попадания из пистолета
+            var pistol = me != null ? me.GetComponent<PistolView>() : null;
+            float sinceHit = pistol != null ? Time.time - pistol.LastHitTime : 99f;
+            bool hitShown = sinceHit < PistolView.HitMarkerTime;
+            Ui.Show(_hitMarker, hitShown);
+            if (hitShown)
+            {
+                // «выпрыгивает» крупнее и сжимается к прицелу, потом тает; положил цель — красный и больше
+                bool kill = pistol.LastHitKnockedDown;
+                float pop = Mathf.Lerp(1.5f, 1f, Mathf.Clamp01(sinceHit / 0.08f)) * (kill ? 1.35f : 1f);
+                _hitMarker.style.scale = new Scale(Vector3.one * pop);
+                _hitMarker.style.opacity = Mathf.Clamp01((PistolView.HitMarkerTime - sinceHit) / 0.2f);
+                foreach (var bar in _hitBars)
+                    bar.style.backgroundColor = kill ? KillColor : HitColor;
+            }
+
+            var fps = me != null ? me.GetComponent<FpsController>() : null;
+            float k = fps != null && health != null && !health.IsDowned && b < 0.5f ? fps.CrouchAmount : 0f;
+            // плавный «въезд»: при k = 0 каска целиком за верхним краем экрана
+            _helmetBrim.style.translate = new Translate(0, Length.Percent(-105f * (1f - k)));
+            Ui.Show(_helmetBrim, k > 0.001f);
+            Ui.Show(_protection, k > 0.6f);
+            _protection.style.opacity = Mathf.InverseLerp(0.6f, 1f, k);
+        }
+
+        /// <summary>Чёрная маска с двумя круглыми окулярами (мягкий край), генерируется один раз.</summary>
+        /// <summary>Маска оптики: один круг по центру, тёмное кольцо по краю линзы.</summary>
+        static Texture2D BuildScopeMask()
+        {
+            const int w = 1024, h = 576;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "ScopeMask" };
+            var pixels = new Color32[w * h];
+            float r = h * 0.46f, edge = 6f, ring = 14f;
+            var c = new Vector2(w * 0.5f, h * 0.5f);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), c) - r;
+                float outside = Mathf.Clamp01(d / edge + 0.5f);
+                float shade = Mathf.Clamp01((d + ring) / ring) * 0.55f; // затемнение у края линзы
+                pixels[y * w + x] = new Color32(0, 0, 0, (byte)(Mathf.Max(outside, shade) * 255f));
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        static Texture2D BuildBinocularMask()
+        {
+            const int w = 1024, h = 576;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "BinocularMask" };
+            var pixels = new Color32[w * h];
+            float r = h * 0.47f, edge = 10f;
+            var c1 = new Vector2(w * 0.5f - r * 0.62f, h * 0.5f);
+            var c2 = new Vector2(w * 0.5f + r * 0.62f, h * 0.5f);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                var p = new Vector2(x + 0.5f, y + 0.5f);
+                float d = Mathf.Min(Vector2.Distance(p, c1), Vector2.Distance(p, c2)) - r;
+                byte a = (byte)(Mathf.Clamp01(d / edge + 0.5f) * 255f);
+                pixels[y * w + x] = new Color32(0, 0, 0, a);
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        /// <summary>
+        /// Ники над стоящими игроками: мелко, в цвет команды, без плашки. Только если голову видно напрямую
+        /// (сквозь стены не выдаём, где прячется противник); с расстоянием мельчают и тают.
+        /// </summary>
+        void UpdateNames(NetworkPlayer me, PlayerHealth health)
+        {
+            var cam = Camera.main;
+            int used = 0;
+            if (health != null && cam != null && _screen.panel != null)
+            {
+                Vector3 eye = cam.transform.position;
+                foreach (var p in PlayerHealth.All)
+                {
+                    if (p == health || !p.IsSpawned || p.IsDowned)
+                        continue;
+                    float range = p.Team == health.Team ? AllyNameRange : EnemyNameRange;
+                    // тело может быть сдвинуто относительно объекта (висит на ракете) — берём его
+                    var body = p.transform.Find("Body");
+                    Vector3 head = (body != null ? body.position : p.transform.position) + Vector3.up * NameHeight;
+                    float dist = Vector3.Distance(eye, head);
+                    if (dist > range || !HeadVisible(eye, head, p, me))
+                        continue;
+                    var pos = Ui.WorldToPanel(_screen.panel, cam, head);
+                    if (pos == null)
+                        continue;
+
+                    if (used == _namePool.Count)
+                    {
+                        var l = Ui.Text(_nameLayer, "", "nametag", "shadow");
+                        l.pickingMode = PickingMode.Ignore;
+                        _namePool.Add(l);
+                    }
+                    var label = _namePool[used++];
+                    Ui.Show(label, true);
+                    Ui.Place(label, pos.Value);
+                    label.text = p.DisplayName;
+                    label.EnableInClassList("team0", p.Team == 0);
+                    label.EnableInClassList("team1", p.Team != 0);
+                    float k = dist / range;
+                    label.style.fontSize = Mathf.Lerp(12f, 9f, k);
+                    label.style.opacity = 0.9f * Mathf.Clamp01((1f - k) / 0.3f);
+                }
+            }
+
+            for (int i = used; i < _namePool.Count; i++)
+                Ui.Show(_namePool[i], false);
+        }
+
+        /// <summary>Ничего не заслоняет голову игрока target (кроме него самого и нас).</summary>
+        static bool HeadVisible(Vector3 eye, Vector3 head, PlayerHealth target, NetworkPlayer me)
+        {
+            Vector3 dir = head - eye;
+            float length = dir.magnitude;
+            foreach (var hit in Physics.RaycastAll(eye, dir / length, length, ~0, QueryTriggerInteraction.Ignore))
+            {
+                var owner = hit.collider.GetComponentInParent<PlayerHealth>();
+                if (owner == target || (me != null && owner == me.Health))
+                    continue;
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>Метка над лежащим союзником: плашка HELP!, расстояние и вылетающие вверх копии надписи.</summary>
+        sealed class HelpMarker
+        {
+            public VisualElement Root;
+            public Label Badge, Distance;
+            public Label[] Rising;
+        }
+
+        const float HelpRisePeriod = 1.2f;
+        const float HelpRiseHeight = 140f;
+
+        HelpMarker CreateHelpMarker()
+        {
+            var m = new HelpMarker { Root = Ui.El(_sosLayer, "help") };
+            // вылетающие копии — под плашкой, две со сдвигом в полпериода: поток надписей не прерывается
+            m.Rising = new[] { Ui.Text(m.Root, "HELP!", "help-rise", "shadow"), Ui.Text(m.Root, "HELP!", "help-rise", "shadow") };
+            m.Badge = Ui.Text(m.Root, "HELP!", "help-badge", "shadow");
+            m.Distance = Ui.Text(m.Root, "", "help-dist", "shadow");
+            m.Root.pickingMode = PickingMode.Ignore;
+            foreach (var child in m.Root.Children())
+                child.pickingMode = PickingMode.Ignore;
+            return m;
+        }
+
+        void UpdateSos(PlayerHealth health)
+        {
+            var cam = Camera.main;
+            int used = 0;
+            float now = Time.unscaledTime;
+            if (health != null && cam != null && _screen.panel != null)
+            {
+                foreach (var p in PlayerHealth.All)
+                {
+                    if (p == health || !p.IsSpawned || !p.IsDowned || p.Team != health.Team)
+                        continue;
+                    // над лежащим телом, чтобы плашка его не закрывала
+                    var pos = Ui.WorldToPanel(_screen.panel, cam, p.transform.position + Vector3.up * 2.2f);
+                    if (pos == null)
+                        continue;
+                    if (used == _helpPool.Count)
+                        _helpPool.Add(CreateHelpMarker());
+                    var m = _helpPool[used++];
+                    Ui.Show(m.Root, true);
+                    Ui.Place(m.Root, pos.Value);
+                    m.Distance.text = $"{Vector3.Distance(cam.transform.position, p.transform.position):0} м";
+
+                    // плашка слегка пульсирует, у каждого лежащего — со своей фазой
+                    float phase = p.NetworkObjectId * 0.37f;
+                    m.Badge.style.scale = new Scale(Vector3.one * (1f + 0.07f * Mathf.Sin((now + phase) * 7f)));
+
+                    // копии надписи улетают вверх, растут и тают
+                    for (int i = 0; i < m.Rising.Length; i++)
+                    {
+                        float k = Mathf.Repeat((now + phase) / HelpRisePeriod + i / (float)m.Rising.Length, 1f);
+                        var rise = m.Rising[i];
+                        rise.style.translate = new Translate(0, -HelpRiseHeight * k);
+                        rise.style.scale = new Scale(Vector3.one * Mathf.Lerp(0.9f, 1.35f, k));
+                        rise.style.opacity = Mathf.Clamp01(1.2f * (1f - k)) * Mathf.Clamp01(k * 6f);
+                    }
+                }
+            }
+
+            for (int i = used; i < _helpPool.Count; i++)
+                Ui.Show(_helpPool[i].Root, false);
+        }
+
+        void UpdateMinimap(NetworkPlayer me, PlayerHealth health)
+        {
+            var map = TacticalMap.Instance;
+            var tex = map != null && health != null ? map.GetTexture(health.Team) : null;
+            Ui.Show(_minimap, tex != null);
+            if (tex == null)
+                return;
+
+            if (_minimapImage.image != tex)
+            {
+                _minimapImage.image = tex;
+                _minimap.style.height = 300f * tex.height / tex.width;
+            }
+
+            var uv = map.WorldToScreen(health.Team, me.transform.position);
+            _minimapMe.style.left = Length.Percent(Mathf.Clamp01(uv.x) * 100f);
+            _minimapMe.style.top = Length.Percent((1f - Mathf.Clamp01(uv.y)) * 100f);
+        }
+    }
+}

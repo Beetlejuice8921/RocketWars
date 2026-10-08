@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c5ac151a6b7e194d9233e8b65ee3d16, type: 3}
+  m_Name: FriendlyFire
+  m_EditorClassIdentifier: Assembly-CSharp::RocketWars.Stats.AchievementDefinition
+  title: "\u0414\u0440\u0443\u0436\u0435\u0441\u043A\u0438\u0439 \u043E\u0433\u043E\u043D\u044C"
+  description: "\u041F\u043E\u043B\u043E\u0436\u0438\u043B \u0445\u043E\u0442\u044F
+    \u0431\u044B \u043E\u0434\u043D\u043E\u0433\u043E \u0441\u043E\u044E\u0437\u043D\u0438\u043A\u0430"
+  rule: 4
+  color: {r: 1, g: 0.55, b: 0.8, a: 1}
+  badge: "\u0414\u041E"
