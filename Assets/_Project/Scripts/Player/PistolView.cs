@@ -4,7 +4,6 @@ using RocketWars.Fx;
 using RocketWars.UI;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -199,14 +198,13 @@ namespace RocketWars.Player
             _model.gameObject.SetActive(canUse && !scoped && !gold);
             _dual.gameObject.SetActive(canUse && !scoped && gold);
 
-            var mouse = Mouse.current;
             var interactor = PlayerInteractor.Local;
             bool onConsole = interactor != null && interactor.Hovered != null;
             // с биноклем у глаз (и пока он поднимается/опускается) не стреляем; в оптику снайперки — можно
             bool binocularsInUse = _binoculars != null && !_binoculars.IsScope && (_binoculars.IsUp || _binoculars.Amount > 0f);
-            // пулемёт стреляет очередью, пока зажата ЛКМ; пистолет — по одному нажатию
+            // пулемёт стреляет очередью, пока зажата кнопка стрельбы; пистолет — по одному нажатию
             bool automatic = HoldingMachineGun || gold;
-            bool trigger = mouse != null && (automatic ? mouse.leftButton.isPressed : mouse.leftButton.wasPressedThisFrame);
+            bool trigger = automatic ? GameInput.IsPressed(GameAction.Fire) : GameInput.WasPressed(GameAction.Fire);
             if (canUse && !onConsole && !binocularsInUse && !MatchManager.FreezePlayers && _cooldown <= 0f && trigger)
                 Fire();
 

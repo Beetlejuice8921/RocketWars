@@ -1,8 +1,8 @@
+using RocketWars.Core;
 using RocketWars.Launcher;
 using RocketWars.Net;
 using RocketWars.UI;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -67,8 +67,7 @@ namespace RocketWars.Player
 
         void Update()
         {
-            var kb = Keyboard.current;
-            bool held = kb != null && kb.eKey.isPressed && !UiRoot.CursorFree;
+            bool held = GameInput.IsPressed(GameAction.Use) && !UiRoot.CursorFree;
 
             if (IsRiding)
             {
@@ -103,9 +102,8 @@ namespace RocketWars.Player
                 return;
             }
 
-            // трюк — только в полёте и пока зажат Q; какой именно — случайно в момент нажатия
-            var kb = Keyboard.current;
-            bool trick = _rocket != null && kb != null && kb.qKey.isPressed && !UiRoot.CursorFree;
+            // трюк — только в полёте и пока зажата клавиша трюка; какой именно — случайно в момент нажатия
+            bool trick = _rocket != null && GameInput.IsPressed(GameAction.Trick) && !UiRoot.CursorFree;
             if (trick && _net.RideTrick == RideTrick.None)
                 _net.SetTrick((RideTrick)Random.Range(1, 4));
             else if (!trick && _net.RideTrick != RideTrick.None)

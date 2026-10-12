@@ -1,6 +1,6 @@
+using RocketWars.Core;
 using RocketWars.Launcher;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -43,8 +43,7 @@ namespace RocketWars.Player
             if (Physics.Raycast(ray, out var hit, range, ~0, QueryTriggerInteraction.Collide))
                 Hovered = hit.collider.GetComponent<ConsoleButton>();
 
-            var mouse = Mouse.current;
-            if (Hovered != null && !justLocked && mouse != null && mouse.leftButton.wasPressedThisFrame && Hovered.IsInteractable)
+            if (Hovered != null && !justLocked && GameInput.WasPressed(GameAction.Fire) && Hovered.IsInteractable)
                 Hovered.Console.RequestPress(Hovered.Kind);
         }
     }

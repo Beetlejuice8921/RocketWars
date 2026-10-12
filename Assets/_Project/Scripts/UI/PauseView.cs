@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 
 namespace RocketWars.UI
 {
-    /// <summary>Пауза по Esc: продолжить, (хост) начать матч, громкость, выйти из комнаты.</summary>
+    /// <summary>Пауза по Esc: продолжить, (хост) начать матч, опции, выйти из комнаты.</summary>
     public class PauseView
     {
         readonly VisualElement _screen;
@@ -27,10 +27,7 @@ namespace RocketWars.UI
                 resume();
             });
 
-            Ui.Text(panel, Loc.T("ГРОМКОСТЬ"), "section");
-            var volume = new Slider(0f, 1f) { value = UiRoot.Volume };
-            volume.RegisterValueChangedCallback(e => UiRoot.Volume = e.newValue);
-            panel.Add(volume);
+            Ui.Btn(panel, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions());
 
             Ui.Btn(panel, Loc.T("Выйти из комнаты"), () => NetworkBootstrap.Instance?.ReturnToMenu(), "btn-danger");
             Ui.Show(_screen, false);

@@ -2,7 +2,6 @@ using RocketWars.Core;
 using RocketWars.Loot;
 using RocketWars.UI;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -66,9 +65,8 @@ namespace RocketWars.Player
             if (_rider == null) _rider = GetComponent<RocketRider>();
             if (_revive == null) _revive = GetComponent<ReviveInteraction>();
 
-            var kb = Keyboard.current;
-            bool held = kb != null && kb.eKey.isPressed && !UiRoot.CursorFree;
-            bool pressed = kb != null && kb.eKey.wasPressedThisFrame && !UiRoot.CursorFree;
+            bool held = GameInput.IsPressed(GameAction.Use) && !UiRoot.CursorFree;
+            bool pressed = GameInput.WasPressed(GameAction.Use) && !UiRoot.CursorFree;
             if (!held)
                 _needRelease = false;
 

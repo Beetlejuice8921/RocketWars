@@ -161,9 +161,59 @@
     width: 760px;
 }
 
-.lang-current {
+/* левая колонка меню: «Опции» и «Выйти из игры» */
+.menu-side {
+    position: absolute;
+    left: 64px;
+    top: 0;
+    bottom: 0;
+    width: 340px;
+    justify-content: center;
+}
+
+.menu-side-btn {
+    height: 56px;
+    font-size: 14px;
+    margin: 6px 0;
+}
+
+/* ---------- опции ---------- */
+
+.options-panel {
+    width: 820px;
+    max-height: 94%;
+    background-color: rgb(28, 32, 40);
+}
+
+.options-scroll {
+    flex-shrink: 1;
+    margin-bottom: 8px;
+}
+
+.options-value {
+    width: 90px;
+    font-size: 12px;
+    -unity-text-align: middle-right;
+}
+
+.bind-row {
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.bind-name {
     flex-grow: 1;
-    margin-left: 12px;
+    flex-shrink: 1;
+    font-size: 11px;
+    white-space: normal;
+}
+
+.bind-key {
+    width: 260px;
+}
+
+.bind-listening {
+    background-color: rgb(196, 130, 40);
 }
 
 .lang-panel {

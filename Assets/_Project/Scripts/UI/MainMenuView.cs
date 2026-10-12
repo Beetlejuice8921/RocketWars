@@ -8,14 +8,14 @@ using UnityEngine.UIElements;
 namespace RocketWars.UI
 {
     /// <summary>
-    /// Главное меню — одно окно: язык, имя, создать комнату (LAN / Internet), поиск комнаты (LAN + Internet, вход по IP или коду),
-    /// громкость, выход.
+    /// Главное меню: в центре — имя, создать комнату (LAN / Internet), поиск комнаты (LAN + Internet, вход по IP или коду);
+    /// слева — «Опции» (язык, громкость, мышь, клавиши) и «Выйти из игры».
     /// </summary>
     public class MainMenuView
     {
         const float ListRefreshInterval = 1f;
 
-        readonly VisualElement _screen, _langPicker;
+        readonly VisualElement _screen;
         readonly TextField _name, _ip, _code;
         readonly ScrollView _list;
         readonly Label _status;
@@ -33,14 +33,13 @@ namespace RocketWars.UI
         public MainMenuView(VisualElement root)
         {
             _screen = Ui.El(root, "layer", "menu-screen");
+            var side = Ui.El(_screen, "menu-side");
+            Ui.Btn(side, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions(), "menu-side-btn");
+            Ui.Btn(side, Loc.T("Выйти из игры"), Quit, "btn-danger", "menu-side-btn");
+
             var panel = Ui.El(_screen, "panel", "menu-panel");
             var title = Ui.Text(panel, "ROCKET WARS", "title", "shadow");
-            SetLangFont(title, Lang.En); // название игры — всегда Press Start 2P
-
-            var langRow = Ui.El(panel, "row");
-            Ui.Text(langRow, Loc.T("Язык"), "label-dim");
-            var current = Ui.Btn(langRow, Loc.NativeNames[(int)Loc.Current], () => Ui.Show(_langPicker, true), "btn-small", "lang-current");
-            SetLangFont(current, Loc.Current);
+            Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
 
             var nameRow = Ui.El(panel, "row");
             Ui.Text(nameRow, Loc.T("Имя"), "label-dim");
@@ -74,45 +73,7 @@ namespace RocketWars.UI
             _code = Ui.Field(codeRow, "", 12, "grow");
             _actions.Add(Ui.Btn(codeRow, Loc.T("Войти по коду"), () => JoinCode(_code.value), "btn-small"));
 
-            Ui.Text(panel, Loc.T("ГРОМКОСТЬ"), "section");
-            var volume = new Slider(0f, 1f) { value = UiRoot.Volume };
-            volume.RegisterValueChangedCallback(e => UiRoot.Volume = e.newValue);
-            panel.Add(volume);
-
             _status = Ui.Text(panel, NetworkBootstrap.LastMessage ?? "", "status");
-            Ui.Btn(panel, Loc.T("Выйти из игры"), Quit, "btn-danger");
-
-            _langPicker = BuildLangPicker();
-        }
-
-        /// <summary>
-        /// Окно выбора языка поверх меню: каждое название написано на своём языке и своим шрифтом.
-        /// Выбор сохраняется, интерфейс пересобирается (UiRoot ловит Loc.Changed).
-        /// </summary>
-        VisualElement BuildLangPicker()
-        {
-            var layer = Ui.El(_screen, "layer", "overlay");
-            layer.RegisterCallback<PointerDownEvent>(e => { if (e.target == layer) Ui.Show(layer, false); });
-            var panel = Ui.El(layer, "panel", "lang-panel");
-            Ui.Text(panel, Loc.T("ЯЗЫК"), "section");
-            var grid = Ui.El(panel, "lang-grid");
-            for (int i = 0; i < Loc.Count; i++)
-            {
-                var lang = (Lang)i;
-                var b = Ui.Btn(grid, Loc.NativeNames[i], () => Loc.Current = lang, "lang-option");
-                if (lang == Loc.Current)
-                    b.AddToClassList("btn-primary");
-                SetLangFont(b, lang);
-            }
-            Ui.Btn(panel, Loc.T("Закрыть (Esc)"), () => Ui.Show(layer, false), "btn-small");
-            Ui.Show(layer, false);
-            return layer;
-        }
-
-        static void SetLangFont(VisualElement e, Lang lang)
-        {
-            e.style.unityFontDefinition = GameFonts.UiFor(lang);
-            e.style.unityTextGenerator = GameFonts.GeneratorFor(lang);
         }
 
         public void SetVisible(bool visible)
@@ -134,10 +95,6 @@ namespace RocketWars.UI
 
         public void Update()
         {
-            var kb = UnityEngine.InputSystem.Keyboard.current;
-            if (kb != null && kb.escapeKey.wasPressedThisFrame)
-                Ui.Show(_langPicker, false);
-
             foreach (var b in _actions)
                 b.SetEnabled(!_busy);
 

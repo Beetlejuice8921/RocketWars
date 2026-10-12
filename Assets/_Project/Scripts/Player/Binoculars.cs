@@ -1,7 +1,6 @@
 using RocketWars.Core;
 using RocketWars.UI;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -66,8 +65,7 @@ namespace RocketWars.Player
             if (_weapon == null)
                 _weapon = GetComponent<PistolView>();
             bool sniper = _weapon != null && _weapon.HoldingSniper;
-            var mouse = Mouse.current;
-            bool pressed = mouse != null && mouse.rightButton.isPressed;
+            bool pressed = GameInput.IsPressed(GameAction.Aim);
             // кончились патроны снайперки с оптикой у глаз — опускаем, бинокль только по новому нажатию
             if (IsUp && IsScope && !sniper)
                 _waitRelease = true;

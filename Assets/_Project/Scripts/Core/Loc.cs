@@ -70,7 +70,10 @@ namespace RocketWars.Core
 
         public static string TConsoleF(string key, params object[] args) => string.Format(TConsole(key), args);
 
-        static string Translate(string key, Lang lang)
+        /// <summary>Перевод с подстановкой текущих клавиш вместо токенов {use}, {jump}, … (GameInput).</summary>
+        static string Translate(string key, Lang lang) => GameInput.ReplaceTokens(Lookup(key, lang));
+
+        static string Lookup(string key, Lang lang)
         {
             if (string.IsNullOrEmpty(key) || lang == Lang.Ru)
                 return key;

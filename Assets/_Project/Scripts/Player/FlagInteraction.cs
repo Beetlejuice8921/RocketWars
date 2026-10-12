@@ -3,7 +3,6 @@ using RocketWars.Flags;
 using RocketWars.Net;
 using RocketWars.UI;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -63,8 +62,7 @@ namespace RocketWars.Player
                 return;
             }
 
-            var kb = Keyboard.current;
-            if (Target != null && kb != null && kb.eKey.wasPressedThisFrame)
+            if (Target != null && GameInput.WasPressed(GameAction.Use))
                 _net.TakeFlag(Target);
         }
 

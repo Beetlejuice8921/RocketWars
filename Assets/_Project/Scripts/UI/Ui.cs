@@ -1,4 +1,5 @@
 using System;
+using RocketWars.Core;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -43,6 +44,13 @@ namespace RocketWars.UI
                 f.AddToClassList(cls);
             parent?.Add(f);
             return f;
+        }
+
+        /// <summary>Шрифт и генератор текста языка (для подписей на «чужом» языке: выбор языка, название игры).</summary>
+        public static void LangFont(VisualElement e, Lang lang)
+        {
+            e.style.unityFontDefinition = GameFonts.UiFor(lang);
+            e.style.unityTextGenerator = GameFonts.GeneratorFor(lang);
         }
 
         public static void Show(VisualElement e, bool visible) => e.EnableInClassList("hidden", !visible);

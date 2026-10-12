@@ -145,18 +145,18 @@ namespace RocketWars.Player
                 var kb = Keyboard.current;
                 if (kb != null)
                 {
-                    float h = (kb.dKey.isPressed ? 1 : 0) - (kb.aKey.isPressed ? 1 : 0);
-                    float v = (kb.wKey.isPressed ? 1 : 0) - (kb.sKey.isPressed ? 1 : 0);
+                    float h = (GameInput.IsPressed(GameAction.Right) ? 1 : 0) - (GameInput.IsPressed(GameAction.Left) ? 1 : 0);
+                    float v = (GameInput.IsPressed(GameAction.Forward) ? 1 : 0) - (GameInput.IsPressed(GameAction.Back) ? 1 : 0);
                     move = Vector3.ClampMagnitude(transform.right * h + transform.forward * v, 1f);
 
                     if (ParachuteOpen)
                         speed = _parachuteSteerSpeed;
                     else if (IsCrouching)
                         speed = _crouchSpeed;
-                    else if (kb.leftShiftKey.isPressed)
+                    else if (GameInput.IsPressed(GameAction.Sprint))
                         speed = _sprintSpeed;
 
-                    if (kb.spaceKey.wasPressedThisFrame)
+                    if (GameInput.WasPressed(GameAction.Jump))
                     {
                         if (ParachuteOpen)
                         {
@@ -304,7 +304,7 @@ namespace RocketWars.Player
             var mouse = Mouse.current;
             if (mouse == null)
                 return;
-            Vector2 delta = mouse.delta.ReadValue() * (mouseSensitivity * LookSensitivityScale);
+            Vector2 delta = mouse.delta.ReadValue() * (mouseSensitivity * GameInput.Sensitivity * LookSensitivityScale);
             if (downed)
                 _lookYaw = Mathf.Repeat(_lookYaw + delta.x + 180f, 360f) - 180f;
             else
@@ -322,8 +322,8 @@ namespace RocketWars.Player
             var kb = Keyboard.current;
             if (kb == null)
                 return Vector3.zero;
-            float h = (kb.dKey.isPressed ? 1 : 0) - (kb.aKey.isPressed ? 1 : 0);
-            float v = (kb.wKey.isPressed ? 1 : 0) - (kb.sKey.isPressed ? 1 : 0);
+            float h = (GameInput.IsPressed(GameAction.Right) ? 1 : 0) - (GameInput.IsPressed(GameAction.Left) ? 1 : 0);
+            float v = (GameInput.IsPressed(GameAction.Forward) ? 1 : 0) - (GameInput.IsPressed(GameAction.Back) ? 1 : 0);
             if (h == 0f && v == 0f)
                 return Vector3.zero;
 
@@ -366,8 +366,7 @@ namespace RocketWars.Player
                 bool wantCrouch = !IsLocal && RemoteCrouch;
                 if (IsLocal && !MovementLocked)
                 {
-                    var kb = Keyboard.current;
-                    wantCrouch = kb != null && (kb.leftCtrlKey.isPressed || kb.cKey.isPressed);
+                    wantCrouch = GameInput.IsPressed(GameAction.Crouch);
                 }
 
                 if (Simulate && !wantCrouch && _currentHeight < standHeight && !HasHeadroom(standHeight))

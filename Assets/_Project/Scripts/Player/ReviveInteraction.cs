@@ -1,5 +1,5 @@
+using RocketWars.Core;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
@@ -56,8 +56,7 @@ namespace RocketWars.Player
                 _rider = GetComponent<RocketRider>();
             bool rocketBusy = _rider != null && (_rider.IsRiding || _rider.HasGrabTarget);
             Target = _health.IsDowned || rocketBusy ? null : FindTarget();
-            var kb = Keyboard.current;
-            bool held = kb != null && kb.eKey.isPressed;
+            bool held = GameInput.IsPressed(GameAction.Use);
             if (!held)
                 _needRelease = false;
 

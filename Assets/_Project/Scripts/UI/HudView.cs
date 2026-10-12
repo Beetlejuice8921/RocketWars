@@ -234,11 +234,11 @@ namespace RocketWars.UI
             _loot.text = kind switch
             {
                 LootKind.MachineGun => Loc.F("ПУЛЕМЁТ · {0} патронов", MachineGunSpec.Ammo),
-                LootKind.Sniper => Loc.F("СНАЙПЕРКА · {0} патрона · ПКМ - прицел ×4", SniperSpec.Ammo),
+                LootKind.Sniper => Loc.F("СНАЙПЕРКА · {0} патрона · {aim} - прицел ×4", SniperSpec.Ammo),
                 LootKind.Bazooka => Loc.F("БАЗУКА · {0} заряда · осторожно, задевает своих", BazookaSpec.Ammo),
                 LootKind.Armor => Loc.F("БРОНЕЖИЛЕТ · +{0} брони", PlayerHealth.MaxArmor.ToString("0")),
                 LootKind.Beacon => Loc.T("МАЯК · вражеские шахты видны на пульте"),
-                _ => Loc.F("АПТЕЧКИ ×{0} · E — вылечиться", LootCrate.MedkitCount),
+                _ => Loc.F("АПТЕЧКИ ×{0} · {use} — вылечиться", LootCrate.MedkitCount),
             };
             _lootTime = Time.time;
         }
@@ -425,50 +425,50 @@ namespace RocketWars.UI
             bool showProgress = false;
             if (revive != null && revive.Target != null)
             {
-                prompt = revive.IsReviving ? Loc.F("Поднимаем {0}…", revive.Target.DisplayName) : Loc.F("Удерживайте E — поднять {0}", revive.Target.DisplayName);
+                prompt = revive.IsReviving ? Loc.F("Поднимаем {0}…", revive.Target.DisplayName) : Loc.F("Удерживайте {use} — поднять {0}", revive.Target.DisplayName);
                 showProgress = true;
                 _progressFill.style.width = Length.Percent(revive.Progress01 * 100f);
             }
             else if (me != null && _rider is RocketRider rider && (rider.IsRiding || rider.HasGrabTarget))
             {
-                prompt = rider.InFlight ? Loc.T("Отпустите E — спрыгнуть · Q — трюк")
-                    : rider.IsRiding ? Loc.T("Отпустите E — спрыгнуть")
+                prompt = rider.InFlight ? Loc.T("Отпустите {use} — спрыгнуть · {trick} — трюк")
+                    : rider.IsRiding ? Loc.T("Отпустите {use} — спрыгнуть")
                     : rider.TargetFull ? Loc.T("На ракете нет места (4 из 4)")
-                    : Loc.T("Удерживайте E — сесть на ракету");
+                    : Loc.T("Удерживайте {use} — сесть на ракету");
             }
             else if (me != null && me.ParachuteOpen)
             {
-                prompt = Loc.T("Пробел — отстегнуть парашют");
+                prompt = Loc.T("{jump} — отстегнуть парашют");
             }
             else if (me != null && _crates is CrateInteraction crates && crates.Target != null)
             {
                 var crate = crates.Target;
                 if (crate.State == CrateState.Closed)
                 {
-                    prompt = crates.IsOpening ? Loc.T("Открываем ящик…") : Loc.T("Удерживайте E — открыть ящик");
+                    prompt = crates.IsOpening ? Loc.T("Открываем ящик…") : Loc.T("Удерживайте {use} — открыть ящик");
                     showProgress = true;
                     _progressFill.style.width = Length.Percent(crates.Progress01 * 100f);
                 }
                 else if (crate.HasItem)
                 {
-                    prompt = Loc.F("E - взять: {0}", LootName(crate.Kind));
+                    prompt = Loc.F("{use} - взять: {0}", LootName(crate.Kind));
                 }
                 else
                 {
                     prompt = health != null && health.Hp >= PlayerHealth.MaxHp
                         ? Loc.F("Аптечек в ящике: {0} · здоровье полное", crate.Medkits)
-                        : Loc.F("E — аптечка +{0} HP (в ящике: {1})", LootCrate.MedkitHeal.ToString("0"), crate.Medkits);
+                        : Loc.F("{use} — аптечка +{0} HP (в ящике: {1})", LootCrate.MedkitHeal.ToString("0"), crate.Medkits);
                 }
             }
             else if (me != null && _flags is FlagInteraction flags && flags.Target != null)
             {
-                prompt = Loc.F("E - забрать флаг {0}", RuntimeMaterials.TeamNameGenitive(flags.Target.Team));
+                prompt = Loc.F("{use} - забрать флаг {0}", RuntimeMaterials.TeamNameGenitive(flags.Target.Team));
             }
             else if (interactor != null && interactor.Hovered != null)
             {
                 var b = interactor.Hovered;
                 string name = b.Kind == ConsoleButtonKind.Launch ? "LAUNCH" : b.Kind.ToString();
-                prompt = b.IsInteractable ? Loc.F("ЛКМ — нажать {0}", name)
+                prompt = b.IsInteractable ? Loc.F("{fire} — нажать {0}", name)
                     : b.Console.IsLockedFor(NetClock.LocalClientId) ? Loc.T("Пультом пользуется другой игрок")
                     : !MatchManager.ConsolesEnabled ? Loc.T("Пульты включатся в начале раунда")
                     : Loc.F("{0} недоступна", name);

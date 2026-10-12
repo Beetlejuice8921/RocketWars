@@ -25,6 +25,7 @@ namespace RocketWars.UI
         HudView _hud;
         PauseView _pause;
         ResultsView _results;
+        OptionsView _options;
         bool _pauseOpen;
         bool _resultsDismissed;
 
@@ -55,6 +56,7 @@ namespace RocketWars.UI
         /// <summary>Собрать интерфейс заново — при старте и при смене языка (все тексты и шрифт берутся заново).</summary>
         void Build()
         {
+            bool optionsOpen = _options != null && _options.IsOpen; // язык меняют из опций — окно остаётся открытым
             _hud?.Dispose();
             _results?.Dispose();
 
@@ -70,7 +72,12 @@ namespace RocketWars.UI
             _results = new ResultsView(root);
             _pause = new PauseView(root, () => SetPause(false));
             _menu = new MainMenuView(root);
+            _options = new OptionsView(root);
+            if (optionsOpen)
+                _options.Open();
         }
+
+        public void OpenOptions() => _options.Open();
 
         void OnDestroy()
         {
@@ -110,18 +117,28 @@ namespace RocketWars.UI
             else _hud.Update();
             if (_pauseOpen) _pause.Update();
             _results.Update();
+            if (_options.IsOpen) _options.Update();
 
-            CursorFree = !inGame || _pauseOpen || resultsModal;
+            CursorFree = !inGame || _pauseOpen || resultsModal || _options.IsOpen;
         }
 
         void HandleKeys(bool inGame, MatchManager match)
         {
             var kb = Keyboard.current;
-            if (kb == null || !inGame)
-            {
+            if (!inGame)
                 _pauseOpen = false;
+            if (kb == null)
+                return;
+
+            // открытые опции забирают Esc себе (отмена назначения клавиши, закрытие окна)
+            if (_options.IsOpen)
+            {
+                if (kb.escapeKey.wasPressedThisFrame)
+                    _options.OnEscape();
                 return;
             }
+            if (!inGame)
+                return;
 
             if (kb.escapeKey.wasPressedThisFrame)
             {
