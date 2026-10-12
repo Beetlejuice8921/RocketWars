@@ -37,6 +37,12 @@ namespace RocketWars.Launcher
 
         public int SiloIndex { get; private set; }
         public Vector3 CurrentVelocity { get; private set; }
+        /// <summary>Точка падения и сколько секунд до неё; под пустотой ракета не взрывается (боты не убегают).</summary>
+        public Vector3 Target => _target;
+        public float TimeToImpact => _duration - _t;
+        public bool HitsGround => _hasGround && !_free;
+        /// <summary>Как далеко прошёл доворот крена на вертикальном разгоне: 0 — стоит как в шахте, 1 — на курсе.</summary>
+        public float LaunchBlend => _free ? 1f : Mathf.SmoothStep(0f, 1f, _t / BoostTime);
 
         void OnEnable() => Active.Add(this);
         void OnDisable() => Active.Remove(this);

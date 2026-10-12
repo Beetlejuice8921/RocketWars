@@ -20,8 +20,9 @@ namespace RocketWars.Core
     {
         public MatchPhase Phase;
         public byte Round;
-        public byte Score0;
-        public byte Score1;
+        // счёт зашифрован в памяти — хост не «докрутит» себе победу
+        public ObscuredInt Score0;
+        public ObscuredInt Score1;
         /// <summary>Победитель последнего раунда/матча: 0, 1 или −1 (ничья).</summary>
         public sbyte Winner;
         public double PhaseEnd;
@@ -37,15 +38,17 @@ namespace RocketWars.Core
 
     /// <summary>
     /// Игровой цикл (решает сервер): Лобби → Отсчёт → Раунд → Итог раунда → … → Конец матча.
-    /// Раунд проигрывает команда, у которой все игроки одновременно лежат. Матч — до 2 побед,
+    /// Раунд проигрывает команда, у которой все игроки одновременно лежат. Матч — до 4 побед (максимум 7 раундов),
     /// каждый раунд — новые острова, полное HP, заряженные шахты.
     /// </summary>
     [RequireComponent(typeof(MatchNet))]
     public class MatchManager : NetworkBehaviour
     {
-        public const int WinsNeeded = 2;
+        public const int WinsNeeded = 4;
         public const float CountdownTime = 3f;
         public const float RoundEndTime = 4f;
+        /// <summary>Через сколько секунд после начала раунда на оба острова с неба опускаются новые ящики.</summary>
+        public const float AirDropDelay = 60f;
 
         public static MatchManager Instance { get; private set; }
 
@@ -68,6 +71,7 @@ namespace RocketWars.Core
         public event Action<int> MatchEnded;
 
         MatchNet _net;
+        double _airDropAt = double.MaxValue; // сервер: когда сбросить ящики в текущем раунде
 
         void Awake()
         {
@@ -96,7 +100,7 @@ namespace RocketWars.Core
             CountTeam(0, out int n0, out _);
             CountTeam(1, out int n1, out _);
             if (n0 == 0 || n1 == 0)
-                return "Нужен хотя бы один игрок в каждой команде";
+                return Loc.T("Нужен хотя бы один игрок в каждой команде");
             return null;
         }
 
@@ -153,9 +157,15 @@ namespace RocketWars.Core
                 case MatchPhase.Countdown when now >= s.PhaseEnd:
                     s.Phase = MatchPhase.Round;
                     _state.Value = s;
+                    _airDropAt = now + AirDropDelay;
                     break;
 
                 case MatchPhase.Round:
+                    if (now >= _airDropAt)
+                    {
+                        _airDropAt = double.MaxValue;
+                        _net.ServerAirDrop();
+                    }
                     int result = CheckRoundResult();
                     if (result == NoResult)
                         break;

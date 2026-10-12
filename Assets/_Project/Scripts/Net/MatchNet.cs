@@ -27,6 +27,7 @@ namespace RocketWars.Net
     /// • seed раунда — острова и шахты генерируются у всех одинаково;
     /// • взрывы рассылаются всем и применяются к кубикам детерминированно, подключившимся позже — история раунда;
     /// • состояние шахт и пультов — NetworkList&lt;SiloSync&gt;, ящиков с припасами — NetworkList&lt;CrateSync&gt;;
+    /// • ящики, сброшенные с неба посреди раунда, — NetworkList&lt;CrateDrop&gt; (у всех создаются в том же порядке);
     /// • спавн игроков с автобалансом команд, тестовые боты.
     /// </summary>
     public class MatchNet : NetworkBehaviour
@@ -39,6 +40,8 @@ namespace RocketWars.Net
         NetworkList<SiloSync> _siloSync;
         NetworkList<CrateSync> _crateSync;
         NetworkList<FlagSync> _flagSync;
+        NetworkList<CrateDrop> _crateDrops;
+        int _droppedCrates; // сколько ящиков из _crateDrops этого раунда уже создано
 
         readonly List<VoxelIsland> _islands = new List<VoxelIsland>();
         readonly List<RocketSilo> _silos = new List<RocketSilo>();
@@ -54,6 +57,13 @@ namespace RocketWars.Net
         /// <summary>Сервер: заспавнить тестовых ботов (союзник лежит рядом, два врага).</summary>
         public static bool SpawnTestBots { get; set; }
 
+        /// <summary>Как часто сервер сверяет численность команд и добавляет/убирает ботов-балансиров.</summary>
+        public const float BotBalanceInterval = 15f;
+
+        readonly List<PlayerHealth> _balanceBots = new List<PlayerHealth>();
+        float _botBalanceTimer = 1f; // первая проверка — сразу после старта хоста
+        int _botCounter;
+
         /// <summary>Сервер: новый раунд построен (для MatchManager на этапе 4).</summary>
         public event Action<int> RoundStarted;
 
@@ -63,6 +73,7 @@ namespace RocketWars.Net
             _siloSync = new NetworkList<SiloSync>();
             _crateSync = new NetworkList<CrateSync>();
             _flagSync = new NetworkList<FlagSync>();
+            _crateDrops = new NetworkList<CrateDrop>();
 
             _worldRoot = new GameObject("World").transform;
             for (int team = 0; team < 2; team++)
@@ -136,6 +147,7 @@ namespace RocketWars.Net
             _siloSync.Clear();
             foreach (var silo in _silos)
                 _siloSync.Add(silo.ToSync());
+            _crateDrops.Clear();
             _crateSync.Clear();
             foreach (var crate in _crates)
                 _crateSync.Add(crate.ToSync());
@@ -149,7 +161,7 @@ namespace RocketWars.Net
                 if (p.TryGetComponent(out NetworkPlayer loadout) && loadout.IsSpawned)
                     loadout.ServerResetLoadout();
                 if (p.TryGetComponent(out NetworkPlayer np) && np.IsSpawned)
-                    np.TeleportRpc(_islands[p.Team].GetRandomSpawnPoint(1f), FacingEnemy(p.Team));
+                    np.ServerTeleport(_islands[p.Team].GetRandomSpawnPoint(1f), FacingEnemy(p.Team));
             }
 
             Debug.Log($"[RocketWars] Round {round.Id}, seed {seed}");
@@ -172,10 +184,15 @@ namespace RocketWars.Net
                 if (crate != null)
                     Destroy(crate.gameObject);
             _crates.Clear();
+            _droppedCrates = 0;
             foreach (var flag in _flags)
                 if (flag != null)
                     Destroy(flag.gameObject);
             _flags.Clear();
+
+            // земля по кругу: каждый следующий раунд — на другой
+            var biome = Biomes.ForRound(round.Id);
+            Biomes.Current = biome;
 
             // ракеты прошлого раунда не должны долететь до новых островов
             foreach (var rocket in FindObjectsByType<Rocket>(FindObjectsSortMode.None))
@@ -183,7 +200,7 @@ namespace RocketWars.Net
 
             for (int team = 0; team < _islands.Count; team++)
             {
-                _islands[team].Build(team, round.Seed + team * 7919);
+                _islands[team].Build(team, round.Seed + team * 7919, biome);
                 var islandSilos = SiloPlacer.Place(_islands[team], round.Seed + team * 104729);
                 _silos.AddRange(islandSilos);
                 _crates.AddRange(CratePlacer.Place(_islands[team], round.Seed + team * 15485863, islandSilos, _worldRoot));
@@ -226,6 +243,7 @@ namespace RocketWars.Net
 
             if (IsServer)
             {
+                UpdateBotBalance();
                 for (int i = 0; i < _silos.Count && i < _siloSync.Count; i++)
                 {
                     var sync = _silos[i].ToSync();
@@ -248,6 +266,7 @@ namespace RocketWars.Net
             }
             else
             {
+                CreateDroppedCrates();
                 for (int i = 0; i < _silos.Count && i < _siloSync.Count; i++)
                     _silos[i].ApplySync(_siloSync[i]);
                 for (int i = 0; i < _crates.Count && i < _crateSync.Count; i++)
@@ -255,6 +274,66 @@ namespace RocketWars.Net
                 for (int i = 0; i < _flags.Count && i < _flagSync.Count; i++)
                     _flags[i].ApplySync(_flagSync[i]);
             }
+        }
+
+        // ---------- сброс ящиков ----------
+
+        /// <summary>Сервер: на каждый остров с неба опускаются ещё count ящиков (в случайные места, подальше от стоящих).</summary>
+        public void ServerAirDrop(int count = CratePlacer.CratesPerIsland)
+        {
+            if (!IsServer || _builtRoundId == 0)
+                return;
+            var rng = new System.Random(Random.Range(1, int.MaxValue));
+            double start = NetClock.Now;
+            for (int team = 0; team < _islands.Count; team++)
+            {
+                var island = _islands[team];
+                var avoid = new List<Vector2>();
+                foreach (var crate in _crates)
+                    if (crate != null && crate.Island == island && crate.State != CrateState.Destroyed)
+                        avoid.Add(crate.Cell);
+                var silos = _silos.FindAll(s => s != null && s.Island == island);
+
+                foreach (var spot in CratePlacer.Pick(island, rng, silos, count, 10f, avoid))
+                {
+                    var drop = new CrateDrop
+                    {
+                        RoundId = _builtRoundId, StartTime = start, Team = (byte)team,
+                        X = (short)spot.X, Z = (short)spot.Z, Kind = (byte)spot.Kind, YawStep = (byte)spot.YawStep
+                    };
+                    var crate = SpawnDroppedCrate(drop);
+                    _crateDrops.Add(drop);
+                    _crateSync.Add(crate.ToSync());
+                    _droppedCrates++;
+                }
+            }
+            Debug.Log($"[RocketWars] Air drop: {_droppedCrates} crates, round {_builtRoundId}");
+        }
+
+        /// <summary>Клиент: создать сброшенные ящики, о которых ещё не знаем (в том же порядке, что на сервере, — те же NetIndex).</summary>
+        void CreateDroppedCrates()
+        {
+            int k = 0;
+            foreach (var drop in _crateDrops)
+            {
+                if (drop.RoundId != _builtRoundId)
+                    continue; // запись прошлого раунда, список ещё не очистился
+                if (k++ >= _droppedCrates)
+                {
+                    SpawnDroppedCrate(drop);
+                    _droppedCrates++;
+                }
+            }
+        }
+
+        LootCrate SpawnDroppedCrate(in CrateDrop drop)
+        {
+            var crate = LootCrate.CreateAirDrop(_islands[drop.Team], drop.X, drop.Z, (LootKind)drop.Kind, drop.YawStep * 90f,
+                _worldRoot, drop.StartTime);
+            crate.NetIndex = _crates.Count;
+            crate.IsAuthority = IsServer;
+            _crates.Add(crate);
+            return crate;
         }
 
         void OnSiloLaunched(RocketSilo silo, LaunchInfo info)
@@ -335,14 +414,68 @@ namespace RocketWars.Net
             player.NetworkObject.SpawnAsPlayerObject(clientId, true);
         }
 
-        /// <summary>Автобаланс: в команду, где меньше игроков.</summary>
+        /// <summary>Автобаланс: в команду, где меньше живых игроков (боты-балансиры потом уйдут сами).</summary>
         static int PickTeam()
         {
-            int a = 0, b = 0;
-            foreach (var p in PlayerHealth.All)
-                if (p.Team == 0) a++;
-                else b++;
+            CountHumans(out int a, out int b);
             return b < a ? 1 : 0;
+        }
+
+        static void CountHumans(out int team0, out int team1)
+        {
+            team0 = team1 = 0;
+            foreach (var p in PlayerHealth.All)
+            {
+                if (!p.IsSpawned || p.GetComponent<NetworkPlayer>().IsBot)
+                    continue;
+                if (p.Team == 0) team0++;
+                else team1++;
+            }
+        }
+
+        // ---------- боты-балансиры ----------
+
+        /// <summary>
+        /// Сервер, не чаще раза в 15 с: в команде, где живых игроков меньше, — столько ботов, сколько не хватает
+        /// до равенства; как только команды уравнялись людьми, лишние боты уходят.
+        /// В режиме тестовых ботов (разработка) балансир выключен.
+        /// </summary>
+        void UpdateBotBalance()
+        {
+            _botBalanceTimer -= Time.deltaTime;
+            if (_botBalanceTimer > 0f || SpawnTestBots)
+                return;
+            _botBalanceTimer = BotBalanceInterval;
+
+            _balanceBots.RemoveAll(b => b == null || !b.IsSpawned);
+            CountHumans(out int h0, out int h1);
+            int needTeam = h0 < h1 ? 0 : 1;
+            int need = h0 == 0 && h1 == 0 ? 0 : Mathf.Abs(h0 - h1);
+
+            // лишние или оказавшиеся не в той команде — уходят (сначала лежащие: их уход не решает исход раунда)
+            int keep = 0;
+            _balanceBots.Sort((a, b) => b.IsDowned.CompareTo(a.IsDowned));
+            for (int i = _balanceBots.Count - 1; i >= 0; i--)
+            {
+                var bot = _balanceBots[i];
+                if (bot.Team == needTeam && keep < need)
+                {
+                    keep++;
+                    continue;
+                }
+                Debug.Log($"[RocketWars] balance bot {bot.DisplayName} leaves (humans {h0}:{h1})");
+                _balanceBots.RemoveAt(i);
+                bot.NetworkObject.Despawn(true);
+            }
+
+            for (int i = keep; i < need; i++)
+            {
+                var bot = CreatePlayer(needTeam, $"Bot {++_botCounter}", true);
+                bot.gameObject.AddComponent<BotBrain>();
+                bot.NetworkObject.Spawn(true);
+                _balanceBots.Add(bot);
+                Debug.Log($"[RocketWars] balance bot {bot.DisplayName} joins team {needTeam} (humans {h0}:{h1})");
+            }
         }
 
         PlayerHealth CreatePlayer(int team, string displayName, bool bot)

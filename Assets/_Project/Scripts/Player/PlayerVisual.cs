@@ -5,8 +5,8 @@ namespace RocketWars.Player
 {
     /// <summary>
     /// Воксельный солдат (камуфляж, каска с цветом команды): шаговая анимация рук и ног, каска надвигается в приседе,
-    /// бинокль на груди / у лица (ПКМ), пистолет в правой руке (вскидывается при выстреле), руки вверх на ракете
-    /// и на стропах, купол парашюта, поза «лежит», звуки шагов,
+    /// бинокль на груди / у лица (ПКМ), пистолет в правой руке (вскидывается при выстреле), руки вверх на стропах,
+    /// посадка верхом на ракету и трюки на ней (брейк, крылья, дэб), купол парашюта, поза «лежит», звуки шагов,
     /// урона, падения на землю и подъёма. Скорость считается по смещению — работает и для чужих игроков.
     /// Берсерк (превращение, золотые пулемёты, облачки) — в PlayerVisual.Berserk.cs.
     /// </summary>
@@ -23,9 +23,9 @@ namespace RocketWars.Player
         static readonly Vector3 ShoulderL = new Vector3(-0.4f, 1.48f, 0f), ShoulderR = new Vector3(0.4f, 1.48f, 0f);
 
         Transform _body, _armL, _armR, _legL, _legR, _helmet, _binoculars, _pistolMuzzle, _gunMuzzle, _sniperMuzzle, _bazookaMuzzle, _parachute;
-        GameObject _pistolModel, _gunModel, _sniperModel, _bazookaModel, _vest;
-        Mesh _helmetMesh;
-        Material[] _helmetMats;
+        GameObject _pistolModel, _gunModel, _sniperModel, _bazookaModel, _vest, _armorHelmet;
+        Mesh _helmetMesh, _armorHelmetMesh;
+        Material[] _helmetMats, _armorHelmetMats;
 
         /// <summary>Покачивание каски при ходьбе: наклон вперёд-назад и вбок (градусы), подпрыгивание (м).</summary>
         const float HelmetNod = 9f, HelmetRoll = 7f, HelmetBob = 0.03f;
@@ -41,7 +41,23 @@ namespace RocketWars.Player
         CharacterController _cc;
         Vector3 _lastPos;
         float _phase, _swing;
+        const float CrawlStroke = 0.9f; // метров на полный цикл гребков
         bool _wasDowned;
+        bool _onRocket;
+
+        // ---------- верхом на ракете и трюки ----------
+        /// <summary>Сидя: руки тянутся вперёд-вниз к корпусу, ноги вперёд и в стороны — обхватывают ракету.</summary>
+        static readonly Quaternion GripArmL = Quaternion.Euler(-42f, 0f, -14f), GripArmR = Quaternion.Euler(-42f, 0f, 14f);
+        static readonly Quaternion SeatLegL = Quaternion.Euler(-62f, 0f, -34f), SeatLegR = Quaternion.Euler(-62f, 0f, 34f);
+        /// <summary>Дэб: правая рука вытянута вверх-вбок, левая — поперёк лица, голова уткнулась в локоть.</summary>
+        static readonly Quaternion DabArmR = Quaternion.FromToRotation(Vector3.down, new Vector3(0.78f, 0.6f, 0.18f).normalized);
+        static readonly Quaternion DabArmL = Quaternion.FromToRotation(Vector3.down, new Vector3(0.72f, 0.42f, 0.55f).normalized);
+        static readonly Quaternion DabHead = Quaternion.Euler(28f, 18f, 12f);
+        /// <summary>Брейк: от подошв до макушки — на ней и крутится.</summary>
+        const float HeadTop = 2.02f;
+        const float HeadSpinSpeed = 600f, WingsBank = 16f;
+        float _trickK, _spin;
+        RideTrick _lastTrick;
 
         void Start()
         {
@@ -113,6 +129,12 @@ namespace RocketWars.Player
             var (vestMesh, vestMats) = Models.WornVest();
             _vest = BoxModel.Spawn(vestMesh, vestMats, _body, Vector3.zero, "Vest");
             _vest.SetActive(false);
+            // и вторая каска цвета жилета поверх обычной — спрыгивает с головы, когда броня кончилась
+            var (armorHelmetMesh, armorHelmetMats) = Models.ArmorHelmet();
+            _armorHelmet = BoxModel.Spawn(armorHelmetMesh, armorHelmetMats, _helmet, new Vector3(0f, Models.ArmorHelmetLift, 0f), "ArmorHelmet");
+            _armorHelmetMesh = armorHelmetMesh;
+            _armorHelmetMats = armorHelmetMats;
+            _armorHelmet.SetActive(false);
             if (_net != null)
                 _net.Shot += OnRemoteShot;
 
@@ -190,7 +212,11 @@ namespace RocketWars.Player
                 Sfx.PlayAt(Sfx.Downed, transform.position + Vector3.up, 1f, 60f);
                 // в момент падения каска слетает с головы и скачет по земле
                 if (_helmet != null && _helmet.gameObject.activeSelf)
+                {
                     Fx.FlyingHelmet.Spawn(_helmetMesh, _helmetMats, _helmet, gameObject);
+                    if (_armorHelmet != null && _armorHelmet.activeSelf)
+                        Fx.FlyingHelmet.Spawn(_armorHelmetMesh, _armorHelmetMats, _armorHelmet.transform, gameObject);
+                }
                 else if (_bCap != null && _bCap.activeSelf)
                     Fx.FlyingHelmet.Spawn(_capMesh, _capMats, _bCap.transform, gameObject); // берсерк теряет фуражку
             }
@@ -221,6 +247,13 @@ namespace RocketWars.Player
             bool vest = _health.Armor > 0f;
             if (_vest.activeSelf != vest)
                 _vest.SetActive(vest);
+            if (_armorHelmet.activeSelf != vest)
+            {
+                // броня кончилась прямо на голове — верхняя каска спрыгивает (у лежащего/берсерка её и так не видно)
+                if (!vest && _helmet.gameObject.activeInHierarchy)
+                    Fx.FlyingHelmet.Spawn(_armorHelmetMesh, _armorHelmetMats, _armorHelmet.transform, gameObject);
+                _armorHelmet.SetActive(vest);
+            }
 
             Vector3 delta = transform.position - _lastPos;
             _lastPos = transform.position;
@@ -235,7 +268,10 @@ namespace RocketWars.Player
             UpdateGlint(dt);
 
             if (_health.IsDowned)
+            {
+                UpdateCrawl(grounded ? speed : 0f, horizontal.magnitude, dt);
                 return;
+            }
 
             // присед — сжатие по высоте, каска глубже надвигается на голову
             if (_controller != null && _cc != null)
@@ -287,16 +323,25 @@ namespace RocketWars.Player
             }
             ApplyScopePose();
 
-            // держится за ракету или за стропы парашюта — руки вверх
+            // держится за стропы парашюта — руки вверх
             bool riding = _net != null && _net.IsRiding;
             bool chute = _net != null && _net.ParachuteOpen;
-            _hands = Mathf.MoveTowards(_hands, riding || chute ? 1f : 0f, dt * 6f);
+            _hands = Mathf.MoveTowards(_hands, chute && !riding ? 1f : 0f, dt * 6f);
             if (_hands > 0f)
             {
                 _armL.localRotation = Quaternion.Slerp(_armL.localRotation, HandsUpL, _hands);
                 _armR.localRotation = Quaternion.Slerp(_armR.localRotation, HandsUpR, _hands);
-                if (riding)
-                    _legL.localRotation = _legR.localRotation = Quaternion.identity; // висит, ноги не идут
+            }
+            // верхом на ракете: сидит, держится за корпус перед собой; трюк — своя поза
+            if (riding)
+            {
+                _body.localScale = Vector3.one;
+                k = 0f;
+                ApplyRidePose(dt);
+            }
+            else
+            {
+                _trickK = 0f;
             }
 
             var armScale = new Vector3(1f, Mathf.Lerp(1f, HoldArmScale, k), 1f);
@@ -307,21 +352,46 @@ namespace RocketWars.Player
             ApplyMorph();
         }
 
+        /// <summary>Лежащий ползёт: руки загребают по земле, ноги отталкиваются, шуршит на каждом гребке.</summary>
+        void UpdateCrawl(float speed, float distance, float dt)
+        {
+            _swing = Mathf.MoveTowards(_swing, speed > 0.3f ? 1f : 0f, 4f * dt);
+            if (speed > 0.3f)
+            {
+                float prev = _phase;
+                _phase += distance / CrawlStroke * 2f * Mathf.PI;
+                if (Mathf.Floor(prev / Mathf.PI) != Mathf.Floor(_phase / Mathf.PI))
+                    Sfx.PlayAt(Sfx.Step, transform.position, 0.2f, 15f, Random.Range(0.6f, 0.75f));
+            }
+            float s = Mathf.Sin(_phase) * _swing;
+            _armL.localRotation = Quaternion.Euler(0f, 0f, -70f - 45f * s);
+            _armR.localRotation = Quaternion.Euler(0f, 0f, 70f - 45f * s);
+            _legL.localRotation = Quaternion.Euler(0f, 0f, -12f * Mathf.Max(0f, s));
+            _legR.localRotation = Quaternion.Euler(0f, 0f, 12f * Mathf.Max(0f, -s));
+        }
+
         /// <summary>Длина руки до кисти (0.62) → расстояние от плеча до бока бинокля.</summary>
         static readonly float HoldArmScale = Vector3.Distance(ShoulderR, BinocularsFace + new Vector3(0.13f, -0.04f, -0.02f)) / 0.62f;
 
         /// <summary>
-        /// Чужой игрок на ракете: тело рисуем точно на нашей копии ракеты (позиция из сети приходит с задержкой
-        /// и на скорости ракеты отставала бы на метры). Свой — двигается сам.
+        /// Игрок на ракете: тело рисуем точно на нашей копии ракеты, верхом (позиция из сети приходит с задержкой
+        /// и на скорости ракеты отставала бы на метры; свой корень стоит рядом с сиденьем, а не в нём).
         /// </summary>
         void LateUpdate()
         {
-            if (_body == null || _net == null || _net.IsOwner || _health.IsDowned)
+            if (_body == null || _net == null || _health.IsDowned)
                 return;
-            if (_net.IsRiding && RocketRider.TryGetHangPosition(_net.RideSilo, _net.RideSlot, out var feet))
-                _body.position = feet;
-            else if (_body.localPosition != Vector3.zero)
+            if (_net.IsRiding && RocketRider.TryGetSeat(_net.RideSilo, _net.RideSlot, out var seat, out var rotation))
+            {
+                PlaceOnRocket(seat, rotation);
+                _onRocket = true;
+            }
+            else if (_onRocket)
+            {
+                _onRocket = false;
                 _body.localPosition = Vector3.zero;
+                _body.localRotation = Quaternion.identity;
+            }
         }
 
         /// <summary>Купол раскрывается за ~0.4 с и так же сворачивается.</summary>
@@ -358,7 +428,9 @@ namespace RocketWars.Player
                 _binoculars.localPosition = BinocularsChest;
                 _binoculars.localRotation = BinocularsChestRot;
                 _body.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-                _body.localPosition = new Vector3(0f, 0.2f, -0.9f);
+                // голова в сторону −forward; тело (ноги … голова ≈ 2 м) — по центру коллайдера, а не позади него:
+                // так его удобно поднимать и оно не проваливается в стены, когда лежащий ползёт
+                _body.localPosition = new Vector3(0f, 0.2f, 1f);
                 _legL.localRotation = _legR.localRotation = Quaternion.identity;
                 // руки раскинуты
                 _armL.localScale = _armR.localScale = Vector3.one;
@@ -370,6 +442,79 @@ namespace RocketWars.Player
                 _body.localRotation = Quaternion.identity;
                 _body.localPosition = Vector3.zero;
             }
+        }
+
+        /// <summary>Поза сидящего верхом (кости — в осях тела) и трюк поверх неё: вход и выход за 0.12 с.</summary>
+        void ApplyRidePose(float dt)
+        {
+            var trick = _net.RideTrick;
+            if (trick != RideTrick.None && trick != _lastTrick)
+            {
+                _lastTrick = trick;
+                _trickK = 0f;
+                _spin = 0f;
+            }
+            _trickK = Mathf.MoveTowards(_trickK, trick != RideTrick.None ? 1f : 0f, dt / 0.12f);
+            if (_trickK <= 0f)
+                _lastTrick = RideTrick.None; // тот же трюк в следующий раз снова начнётся с начала
+
+            Quaternion armL = GripArmL, armR = GripArmR, legL = SeatLegL, legR = SeatLegR, head = Quaternion.identity;
+            float t = Time.time;
+            switch (_lastTrick)
+            {
+                case RideTrick.Breakdance:
+                    // стойка на голове: руки упираются в корпус у головы, ноги раскрыты буквой V и ходят «ножницами»
+                    _spin += HeadSpinSpeed * dt;
+                    float scissors = Mathf.Sin(t * 9f) * 14f;
+                    armL = Quaternion.Euler(180f, 0f, -38f);
+                    armR = Quaternion.Euler(180f, 0f, 38f);
+                    legL = Quaternion.Euler(scissors, 0f, -42f);
+                    legR = Quaternion.Euler(-scissors, 0f, 42f);
+                    break;
+                case RideTrick.Wings:
+                    // руки в стороны с лёгким взмахом, тело кренится, как самолёт в вираже (крен — в PlaceOnRocket)
+                    float flap = Mathf.Sin(t * 5f) * 6f;
+                    armL = Quaternion.Euler(0f, 0f, -90f + flap);
+                    armR = Quaternion.Euler(0f, 0f, 90f - flap);
+                    head = Quaternion.Euler(-10f, 0f, 0f);
+                    break;
+                case RideTrick.Dab:
+                    // дэб с небольшим пружинящим покачиванием
+                    float bob = Mathf.Sin(t * 7f) * 4f;
+                    armL = DabArmL * Quaternion.Euler(bob, 0f, 0f);
+                    armR = DabArmR * Quaternion.Euler(-bob, 0f, 0f);
+                    head = DabHead;
+                    break;
+            }
+
+            float k = _trickK;
+            if (_shotPose <= 0f)
+                _armR.localRotation = Quaternion.Slerp(GripArmR, armR, k);
+            _armL.localRotation = Quaternion.Slerp(GripArmL, armL, k);
+            _legL.localRotation = Quaternion.Slerp(SeatLegL, legL, k);
+            _legR.localRotation = Quaternion.Slerp(SeatLegR, legR, k);
+            _helmet.localRotation = Quaternion.Slerp(Quaternion.identity, head, k);
+        }
+
+        /// <summary>Тело на сиденье: бёдра на спине ракеты; брейк — вверх ногами на макушке, с вращением; крылья — крен.</summary>
+        void PlaceOnRocket(Vector3 seat, Quaternion rotation)
+        {
+            float k = _trickK * _trickK * (3f - 2f * _trickK);
+            Quaternion sit = rotation;
+            Vector3 pivot = Vector3.up * RocketRider.HipLift;
+            switch (_lastTrick)
+            {
+                case RideTrick.Breakdance:
+                    // переворот через голову вперёд и вращение вокруг своей оси
+                    var flip = rotation * Quaternion.AngleAxis(180f, Vector3.right) * Quaternion.AngleAxis(_spin, Vector3.up);
+                    sit = Quaternion.Slerp(rotation, flip, k);
+                    pivot = Vector3.Lerp(pivot, Vector3.up * HeadTop, k);
+                    break;
+                case RideTrick.Wings:
+                    sit = rotation * Quaternion.AngleAxis(Mathf.Sin(Time.time * 1.6f) * WingsBank * k, Vector3.forward);
+                    break;
+            }
+            _body.SetPositionAndRotation(seat - sit * pivot, sit);
         }
     }
 }

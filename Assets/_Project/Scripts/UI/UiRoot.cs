@@ -46,12 +46,25 @@ namespace RocketWars.UI
 
         void OnEnable()
         {
+            Build();
+            Loc.Changed += Build;
+        }
+
+        void OnDisable() => Loc.Changed -= Build;
+
+        /// <summary>Собрать интерфейс заново — при старте и при смене языка (все тексты и шрифт берутся заново).</summary>
+        void Build()
+        {
+            _hud?.Dispose();
+            _results?.Dispose();
+
             var root = GetComponent<UIDocument>().rootVisualElement;
             root.Clear();
-            if (styleSheet != null)
+            if (styleSheet != null && !root.styleSheets.Contains(styleSheet))
                 root.styleSheets.Add(styleSheet);
             root.AddToClassList("root");
             root.style.unityFontDefinition = GameFonts.Ui;
+            root.style.unityTextGenerator = GameFonts.GeneratorFor(Loc.Current);
 
             _hud = new HudView(root);
             _results = new ResultsView(root);
@@ -62,6 +75,7 @@ namespace RocketWars.UI
         void OnDestroy()
         {
             _hud?.Dispose();
+            _results?.Dispose();
             if (Instance == this)
                 Instance = null;
         }
@@ -80,12 +94,13 @@ namespace RocketWars.UI
             HandleKeys(inGame, match);
 
             _menu.SetVisible(!inGame);
-            _hud.SetVisible(inGame);
-            _pause.SetVisible(inGame && _pauseOpen);
-
             var kb = Keyboard.current;
             bool tabHeld = kb != null && kb.tabKey.isPressed && inGame;
             bool resultsModal = matchEnd && !_resultsDismissed;
+
+            // на экране итогов HUD (здоровье, счёт, подсказки) не нужен — не просвечивает сквозь пьедестал
+            _hud.SetVisible(inGame && !resultsModal);
+            _pause.SetVisible(inGame && _pauseOpen);
             _results.SetMode(resultsModal ? ResultsView.Mode.Final : tabHeld ? ResultsView.Mode.Peek : ResultsView.Mode.Hidden,
                 () => _resultsDismissed = true);
 

@@ -281,6 +281,26 @@ namespace RocketWars.Core
             return m.Build($"char_helmet_{team}");
         }
 
+        /// <summary>Насколько броне-каска приподнята над обычной: из-под неё видны низ купола и полоса команды.</summary>
+        public const float ArmorHelmetLift = 0.12f;
+
+        /// <summary>
+        /// Вторая каска цвета бронежилета — надевается поверх обычной, пока есть броня (чуть крупнее и выше неё).
+        /// Pivot в нижней точке; дочерняя к обычной каске, поэтому повторяет её покачивание и присед.
+        /// </summary>
+        public static (Mesh mesh, Material[] materials) ArmorHelmet()
+        {
+            const float k = 1.25f * 1.1f;
+            var m = new BoxModel();
+            VoxelDisc(m, -0.01f * k, 0.02f * k, 0.3f * k, 10, VestNavy);                 // поля
+            VoxelDisc(m, 0f, 0.12f * k, 0.26f * k, 8, VestNavy);
+            VoxelDisc(m, 0.12f * k, 0.18f * k, 0.22f * k, 7, VestNavy);
+            VoxelDisc(m, 0.18f * k, 0.23f * k, 0.16f * k, 5, VestNavy);
+            VoxelDisc(m, 0.23f * k, 0.26f * k, 0.09f * k, 3, VestNavy);
+            VoxelDisc(m, 0.05f * k, 0.09f * k, 0.26f * k * 1.04f, 8, VestNavyDark);     // тёмный ремешок, как карман жилета
+            return m.Build("armor_helmet");
+        }
+
         /// <summary>Рука: шарнир в плече (0,0,0), висит вниз. Рукав в камуфляже с повязкой цвета команды, перчатка.</summary>
         public static (Mesh mesh, Material[] materials) CharacterArm(int team)
         {

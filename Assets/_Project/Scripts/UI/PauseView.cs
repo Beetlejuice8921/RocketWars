@@ -17,22 +17,22 @@ namespace RocketWars.UI
             _screen = Ui.El(root, "layer", "overlay");
             var panel = Ui.El(_screen, "panel");
             panel.style.width = 520;
-            Ui.Text(panel, "ПАУЗА", "title", "shadow");
+            Ui.Text(panel, Loc.T("ПАУЗА"), "title", "shadow");
             _room = Ui.Text(panel, "", "label-dim");
 
-            Ui.Btn(panel, "Продолжить", resume, "btn-primary");
-            _start = Ui.Btn(panel, "Начать матч", () =>
+            Ui.Btn(panel, Loc.T("Продолжить"), resume, "btn-primary");
+            _start = Ui.Btn(panel, Loc.T("Начать матч"), () =>
             {
                 MatchManager.Instance?.RequestStartMatch();
                 resume();
             });
 
-            Ui.Text(panel, "ГРОМКОСТЬ", "section");
+            Ui.Text(panel, Loc.T("ГРОМКОСТЬ"), "section");
             var volume = new Slider(0f, 1f) { value = UiRoot.Volume };
             volume.RegisterValueChangedCallback(e => UiRoot.Volume = e.newValue);
             panel.Add(volume);
 
-            Ui.Btn(panel, "Выйти из комнаты", () => NetworkBootstrap.Instance?.ReturnToMenu(), "btn-danger");
+            Ui.Btn(panel, Loc.T("Выйти из комнаты"), () => NetworkBootstrap.Instance?.ReturnToMenu(), "btn-danger");
             Ui.Show(_screen, false);
         }
 
@@ -47,11 +47,11 @@ namespace RocketWars.UI
             {
                 string blocker = m.StartBlocker();
                 _start.SetEnabled(blocker == null);
-                _start.text = blocker ?? (m.Phase == MatchPhase.MatchEnd ? "Новый матч" : "Начать матч");
+                _start.text = blocker ?? Loc.T(m.Phase == MatchPhase.MatchEnd ? "Новый матч" : "Начать матч");
             }
 
             var session = SessionService.Current;
-            _room.text = session != null ? $"Код комнаты: {session.Code}" : "Комната в локальной сети";
+            _room.text = session != null ? Loc.F("Код комнаты: {0}", session.Code) : Loc.T("Комната в локальной сети");
         }
     }
 }

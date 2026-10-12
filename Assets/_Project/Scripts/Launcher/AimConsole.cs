@@ -284,7 +284,7 @@ namespace RocketWars.Launcher
 
             _beaconBanner.SetActive(left > 0f);
             if (left > 0f)
-                _beaconText.text = $"МАЯК: шахты врага · {Mathf.CeilToInt(left)} с";
+                _beaconText.text = Loc.TConsoleF("МАЯК: шахты врага · {0} с", Mathf.CeilToInt(left));
         }
 
         void SetStatus(string text, Color bg)
@@ -335,8 +335,7 @@ namespace RocketWars.Launcher
 
         void BuildCanvas(Transform head)
         {
-            if (_font == null)
-                _font = GameFonts.Pixel;
+            _font = GameFonts.Console; // шрифт зависит от языка (CJK — свой пиксельный)
 
             var canvasGo = new GameObject("Screen", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
             var canvasRt = (RectTransform)canvasGo.transform;
@@ -368,7 +367,7 @@ namespace RocketWars.Launcher
             warnRt.anchorMax = new Vector2(1f, 0.2f);
             warnRt.sizeDelta = Vector2.zero;
             Img(warnRt, new Color(0.6f, 0f, 0f, 0.75f));
-            Txt(warnRt, "ЦЕЛЬ НА СВОЁМ ОСТРОВЕ!", 12, Color.white);
+            FitWidth(Txt(warnRt, Loc.TConsole("ЦЕЛЬ НА СВОЁМ ОСТРОВЕ!"), 12, Color.white));
             _warning = warnRt.gameObject;
 
             var beaconRt = Rect(mapRt, "Beacon", Vector2.zero, Vector2.zero);
@@ -376,7 +375,7 @@ namespace RocketWars.Launcher
             beaconRt.anchorMax = new Vector2(1f, 1f);
             beaconRt.sizeDelta = Vector2.zero;
             Img(beaconRt, new Color(0.55f, 0.3f, 0f, 0.6f)); // полупрозрачно: метки рисуются поверх
-            _beaconText = Txt(beaconRt, "", 12, Color.white);
+            _beaconText = FitWidth(Txt(beaconRt, "", 12, Color.white));
             _beaconBanner = beaconRt.gameObject;
             _beaconBanner.SetActive(false);
 
@@ -446,6 +445,16 @@ namespace RocketWars.Launcher
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
+            return t;
+        }
+
+        /// <summary>Переводы бывают длиннее русского: текст ужимается до ширины плашки, но не крупнее заданного размера.</summary>
+        static Text FitWidth(Text t)
+        {
+            t.horizontalOverflow = HorizontalWrapMode.Wrap;
+            t.resizeTextForBestFit = true;
+            t.resizeTextMinSize = 6;
+            t.resizeTextMaxSize = t.fontSize;
             return t;
         }
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using RocketWars.Core;
 using UnityEngine;
 
 namespace RocketWars.Stats
@@ -36,6 +37,30 @@ namespace RocketWars.Stats
         public static event Action<FeedEntry> Received;
 
         public static void Raise(in FeedEntry entry) => Received?.Invoke(entry);
+
+        /// <summary>
+        /// Подпись справа от иконки на языке этого клиента. У шахты и флага сервер присылает не текст,
+        /// а команду цели и глагол-ключ («забрал» / «уронил» / «доставил», пусто — флаг вернулся на базу).
+        /// </summary>
+        public static string TargetText(in FeedEntry e)
+        {
+            string team = RuntimeMaterials.TeamNameGenitive(e.TargetTeam);
+            switch (e.Kind)
+            {
+                case FeedKind.Silo:
+                    return Loc.F("шахта {0}", team);
+                case FeedKind.Flag:
+                    return e.Target switch
+                    {
+                        "забрал" => Loc.F("забрал флаг {0}", team),
+                        "уронил" => Loc.F("уронил флаг {0}", team),
+                        "доставил" => Loc.F("доставил флаг {0}", team),
+                        _ => Loc.F("флаг {0} на базе", team),
+                    };
+                default:
+                    return e.Target;
+            }
+        }
 
         static readonly Dictionary<FeedKind, Texture2D> Icons = new Dictionary<FeedKind, Texture2D>();
 

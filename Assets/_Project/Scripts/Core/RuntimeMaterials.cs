@@ -14,10 +14,10 @@ namespace RocketWars.Core
         public static Color TeamColor(int team) => team == 0 ? TeamRed : TeamGreen;
 
         /// <summary>«КРАСНЫЕ» / «ЗЕЛЁНЫЕ».</summary>
-        public static string TeamName(int team) => team == 0 ? "КРАСНЫЕ" : "ЗЕЛЁНЫЕ";
+        public static string TeamName(int team) => Loc.T(team == 0 ? "КРАСНЫЕ" : "ЗЕЛЁНЫЕ");
 
         /// <summary>«КРАСНЫХ» / «ЗЕЛЁНЫХ» (шахта чьей команды).</summary>
-        public static string TeamNameGenitive(int team) => team == 0 ? "КРАСНЫХ" : "ЗЕЛЁНЫХ";
+        public static string TeamNameGenitive(int team) => Loc.T(team == 0 ? "КРАСНЫХ" : "ЗЕЛЁНЫХ");
 
         public static Material Lit(Color color)
         {

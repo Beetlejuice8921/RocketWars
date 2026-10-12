@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using RocketWars.Core;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Multiplayer;
@@ -69,8 +70,8 @@ namespace RocketWars.Net
         public static string Describe(Exception e)
         {
             if (e is ServicesInitializationException || e.Message.Contains("project", StringComparison.OrdinalIgnoreCase))
-                return "Internet недоступен: привяжите проект к Unity Cloud (Project Settings → Services)";
-            return $"Ошибка сети: {e.Message}";
+                return Loc.T("Internet недоступен: привяжите проект к Unity Cloud (Project Settings → Services)");
+            return Loc.F("Ошибка сети: {0}", e.Message);
         }
     }
 }

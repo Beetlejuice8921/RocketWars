@@ -116,7 +116,7 @@ namespace RocketWars.Terrain
         void TryAddGrass(int x, int y, int z)
         {
             int hash = ((x * 92837111) ^ (z * 689287499) ^ (_island.Seed * 283923481)) & int.MaxValue;
-            if (hash % 100 >= GrassTufts.Density)
+            if (hash % 100 >= GrassTufts.Density(_island.Biome))
                 return;
             hash /= 100;
             // небольшой сдвиг внутри клетки, чтобы пучки не стояли ровной сеткой
@@ -124,7 +124,7 @@ namespace RocketWars.Terrain
             var bottom = new Vector3(x - _originX + 0.5f + ox, y + 1f, z - _originZ + 0.5f + oz);
 
             // пучок в тон своему кубику
-            GrassTufts.Add(_grassVerts, _grassNormals, _grassUvs, _grassTris, bottom, hash / 49, _island.GrassPalette(x, z));
+            GrassTufts.Add(_grassVerts, _grassNormals, _grassUvs, _grassTris, bottom, hash / 49, _island.GrassPalette(x, z), _island.Biome);
         }
 
         int PickTile(int face, bool covered, int x, int y, int z)

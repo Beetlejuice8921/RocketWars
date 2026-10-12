@@ -1,3 +1,4 @@
+using RocketWars.Core;
 using Unity.Netcode.Components;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -6,7 +7,7 @@ namespace RocketWars.Player
 {
     /// <summary>
     /// Движение от первого лица: бег, спринт, прыжок, присед, автоподъём на 1 кубик (stepOffset),
-    /// висение на ракете (позицию задаёт RocketRider), инерция после схода с ракеты и парашют
+    /// езда верхом на ракете (позицию задаёт RocketRider), инерция после схода с ракеты и парашют
     /// (сам раскрывается при падении выше 10 м, исчезает при приземлении или по пробелу),
     /// жёсткое приземление без парашюта (событие HardLanding, урон — на сервере).
     /// Pivot — в ногах. Без IsLocal ввод не читается (боты, удалённые игроки).
@@ -14,21 +15,26 @@ namespace RocketWars.Player
     [RequireComponent(typeof(CharacterController))]
     public class FpsController : MonoBehaviour
     {
-        [Header("Movement")]
-        public float walkSpeed = 5f;
-        public float sprintSpeed = 7.5f;
-        public float crouchSpeed = 2.5f;
-        public float jumpHeight = 1.3f;
-        public float gravity = -22f;
-        public float stepOffset = 1.05f;
-        public float maxFallSpeed = 40f;
+        // Параметры движения зашифрованы в памяти (ObscuredFloat) и не настраиваются в инспекторе:
+        // иначе ArtMoney находит «5» / «−22» и превращает их в спидхак, суперпрыжок или полёт.
+        public const float SprintSpeed = 7.5f;
+        readonly ObscuredFloat _walkSpeed = 5f;
+        readonly ObscuredFloat _sprintSpeed = SprintSpeed;
+        readonly ObscuredFloat _crouchSpeed = 2.5f;
+        /// <summary>Лежащий ползёт втрое медленнее шага.</summary>
+        readonly ObscuredFloat _crawlSpeed = 5f / 3f;
+        const float CrawlTurnSpeed = 240f;
+        readonly ObscuredFloat _jumpHeight = 1.3f;
+        readonly ObscuredFloat _gravity = -22f;
+        readonly ObscuredFloat _stepOffset = 1.05f;
+        readonly ObscuredFloat _maxFallSpeed = 40f;
         const float MaxStep = 0.05f;
         const int MaxSubsteps = 4;
 
-        [Header("Parachute")]
-        public float parachuteOpenHeight = 10f;
-        public float parachuteFallSpeed = 4f;
-        public float parachuteSteerSpeed = 3.5f;
+        readonly ObscuredFloat _parachuteOpenHeight = 10f;
+        readonly ObscuredFloat _parachuteFallSpeed = 4f;
+        public const float ParachuteSteerSpeed = 3.5f;
+        readonly ObscuredFloat _parachuteSteerSpeed = ParachuteSteerSpeed;
 
         [Header("Body")]
         public float standHeight = 2f;
@@ -67,6 +73,19 @@ namespace RocketWars.Player
         public float? HoverTarget { get; set; }
         /// <summary>Жёсткое приземление без парашюта: высота падения в метрах (урон считает сервер).</summary>
         public event System.Action<float> HardLanding;
+
+        /// <summary>Ввод бота: направление движения в мировых осях (длина ≤ 1) и бег.</summary>
+        public Vector3 BotMove { get; set; }
+        public bool BotSprint { get; set; }
+        bool _botJump;
+        /// <summary>Бот: прыгнуть (если стоит на земле).</summary>
+        public void BotJump() => _botJump = true;
+        /// <summary>Бот: наклон взгляда (руки с оружием и выстрелы — из CameraRoot).</summary>
+        public void SetPitch(float pitch)
+        {
+            _pitch = Mathf.Clamp(pitch, -89f, 89f);
+            ApplyCameraRotation();
+        }
 
         CharacterController _cc;
         PlayerHealth _health;
@@ -120,7 +139,7 @@ namespace RocketWars.Player
                 UpdateParachute();
 
             Vector3 move = Vector3.zero;
-            float speed = ParachuteOpen ? parachuteSteerSpeed : walkSpeed;
+            float speed = ParachuteOpen ? _parachuteSteerSpeed : _walkSpeed;
             if (IsLocal && !downed && !MovementLocked)
             {
                 var kb = Keyboard.current;
@@ -131,11 +150,11 @@ namespace RocketWars.Player
                     move = Vector3.ClampMagnitude(transform.right * h + transform.forward * v, 1f);
 
                     if (ParachuteOpen)
-                        speed = parachuteSteerSpeed;
+                        speed = _parachuteSteerSpeed;
                     else if (IsCrouching)
-                        speed = crouchSpeed;
+                        speed = _crouchSpeed;
                     else if (kb.leftShiftKey.isPressed)
-                        speed = sprintSpeed;
+                        speed = _sprintSpeed;
 
                     if (kb.spaceKey.wasPressedThisFrame)
                     {
@@ -147,11 +166,24 @@ namespace RocketWars.Player
                         }
                         else if (_cc.isGrounded && !IsCrouching)
                         {
-                            _velocity.y = Mathf.Sqrt(2f * jumpHeight * -gravity);
+                            _velocity.y = Mathf.Sqrt(2f * _jumpHeight * -_gravity);
                         }
                     }
                 }
             }
+            else if (IsLocal && downed && !MovementLocked)
+            {
+                move = CrawlInput();
+                speed = _crawlSpeed;
+            }
+            else if (!IsLocal && !downed && !MovementLocked)
+            {
+                move = Vector3.ClampMagnitude(new Vector3(BotMove.x, 0f, BotMove.z), 1f);
+                speed = ParachuteOpen ? _parachuteSteerSpeed : BotSprint ? _sprintSpeed : _walkSpeed;
+                if (_botJump && _cc.isGrounded)
+                    _velocity.y = Mathf.Sqrt(2f * _jumpHeight * -_gravity);
+            }
+            _botJump = false;
 
             // длинный кадр (загрузка, подключение) режем на подшаги, чтобы не «пробить» тонкий остров
             float remaining = Mathf.Min(Time.deltaTime, MaxStep * MaxSubsteps);
@@ -169,7 +201,7 @@ namespace RocketWars.Player
                 {
                     if (_cc.isGrounded && _velocity.y < 0)
                         _velocity.y = -2f;
-                    _velocity.y = Mathf.Max(_velocity.y + gravity * dt, ParachuteOpen ? -parachuteFallSpeed : -maxFallSpeed);
+                    _velocity.y = Mathf.Max(_velocity.y + _gravity * dt, ParachuteOpen ? -_parachuteFallSpeed : -_maxFallSpeed);
                 }
 
                 // инерция: на земле гасится за доли секунды, под куполом — за пару секунд, в свободном полёте почти сохраняется
@@ -218,7 +250,7 @@ namespace RocketWars.Player
             if (ParachuteOpen || _parachuteCut || _cc.isGrounded || _velocity.y > -2f)
                 return;
             bool groundClose = Physics.Raycast(transform.position + Vector3.up * 0.1f, Vector3.down,
-                parachuteOpenHeight, ~0, QueryTriggerInteraction.Ignore);
+                _parachuteOpenHeight, ~0, QueryTriggerInteraction.Ignore);
             if (!groundClose)
                 ParachuteOpen = true;
         }
@@ -246,6 +278,7 @@ namespace RocketWars.Player
             Attached = false;
             _cc.enabled = false; // синхронизировать CharacterController с новой позицией
             _cc.enabled = true;
+            ResetEye();
             ExternalVelocity = new Vector3(velocity.x, 0f, velocity.z);
             _velocity = new Vector3(0f, velocity.y, 0f);
         }
@@ -278,6 +311,36 @@ namespace RocketWars.Player
                 transform.Rotate(0f, delta.x, 0f, Space.Self);
             _pitch = Mathf.Clamp(_pitch - delta.y, -89f, 89f);
             ApplyCameraRotation();
+        }
+
+        /// <summary>
+        /// Ползком: WASD относительно взгляда камеры (лёжа она крутится отдельно от тела), тело разворачивается
+        /// головой по ходу движения, а камера при этом остаётся смотреть туда же.
+        /// </summary>
+        Vector3 CrawlInput()
+        {
+            var kb = Keyboard.current;
+            if (kb == null)
+                return Vector3.zero;
+            float h = (kb.dKey.isPressed ? 1 : 0) - (kb.aKey.isPressed ? 1 : 0);
+            float v = (kb.wKey.isPressed ? 1 : 0) - (kb.sKey.isPressed ? 1 : 0);
+            if (h == 0f && v == 0f)
+                return Vector3.zero;
+
+            var view = transform.rotation * Quaternion.Euler(0f, _lookYaw, 0f);
+            Vector3 move = Vector3.ClampMagnitude(view * Vector3.right * h + view * Vector3.forward * v, 1f);
+
+            // лёжа голова — со стороны −forward (PlayerVisual): поворачиваем тело затылком назад к движению
+            float bodyYaw = transform.eulerAngles.y;
+            float wantYaw = Quaternion.LookRotation(-move).eulerAngles.y;
+            float turn = Mathf.MoveTowardsAngle(bodyYaw, wantYaw, CrawlTurnSpeed * Time.deltaTime) - bodyYaw;
+            if (turn != 0f)
+            {
+                transform.Rotate(0f, turn, 0f, Space.Self);
+                _lookYaw = Mathf.Repeat(_lookYaw - turn + 180f, 360f) - 180f;
+                ApplyCameraRotation();
+            }
+            return move;
         }
 
         /// <summary>Игрока подняли — он смотрит туда же, куда смотрел лёжа.</summary>
@@ -333,9 +396,12 @@ namespace RocketWars.Player
             _currentHeight = height;
             _cc.height = height;
             _cc.center = Vector3.up * (height * 0.5f);
-            _cc.stepOffset = Mathf.Min(stepOffset, Mathf.Max(0f, height - 0.1f));
-            CameraRoot.localPosition = Vector3.up * Mathf.Max(0.3f, height - eyeBelowTop);
+            _cc.stepOffset = Mathf.Min(_stepOffset, Mathf.Max(0f, height - 0.1f));
+            ResetEye();
         }
+
+        /// <summary>Глаза — над капсулой (верхом на ракете их на время переносит в голову RocketRider).</summary>
+        void ResetEye() => CameraRoot.localPosition = Vector3.up * Mathf.Max(0.3f, _currentHeight - eyeBelowTop);
 
         public void Teleport(Vector3 position)
         {
@@ -347,6 +413,7 @@ namespace RocketWars.Player
             ParachuteOpen = false;
             _parachuteCut = false;
             Attached = false;
+            ResetEye();
             _ignoreNextLanding = true; // появление сверху острова — не «падение»
             _airPeakY = position.y;
             // без телепорта NetworkTransform чужие копии «проплывут» через всю карту

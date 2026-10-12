@@ -4,7 +4,7 @@ using UnityEngine.Rendering;
 namespace RocketWars.Player
 {
     /// <summary>
-    /// Лёжа (и на 2 с превращения в берсерка) камера уходит в вид от третьего лица: плавно отъезжает назад и вверх от тела и облетает его
+    /// Лёжа, во время трюка на ракете (и на 2 с превращения в берсерка) камера уходит в вид от третьего лица: плавно отъезжает назад и вверх от тела и облетает его
     /// вслед за мышью (поворот задаёт FpsController). Камера висит на «штативе» (boom) между CameraRoot и камерой,
     /// поэтому сама точка глаз, выстрелы и тряска не трогаются. Склоны и стены сзади подтягивают камеру ближе.
     /// В этом виде своё тело рисуется (обычно от него видна только тень).
@@ -29,7 +29,7 @@ namespace RocketWars.Player
         NetworkPlayer _net;
         Renderer[] _body;
         float _blend;
-        bool _bodyShown;
+        bool _bodyShown, _trick;
 
         void Awake()
         {
@@ -45,7 +45,15 @@ namespace RocketWars.Player
 
             // лёжа и на время превращения в берсерка (его надо увидеть со стороны) — вид от третьего лица
             bool thirdPerson = _health.IsDowned || (_net != null && _net.InBerserkTransform);
-            float target = thirdPerson ? 1f : 0f;
+            // трюк на ракете — вид от третьего лица сразу, без отъезда; отпустил Q — сразу обратно в глаза
+            bool trick = _net != null && _net.RideTrick != RideTrick.None;
+            if (trick != _trick)
+            {
+                _trick = trick;
+                if (trick || !thirdPerson)
+                    _blend = trick ? 1f : 0f;
+            }
+            float target = thirdPerson || trick ? 1f : 0f;
             _blend = Mathf.MoveTowards(_blend, target, BlendSpeed * Time.deltaTime);
             float k = Mathf.SmoothStep(0f, 1f, _blend);
 

@@ -12,7 +12,7 @@ using UnityEngine.UIElements;
 namespace RocketWars.UI
 {
     /// <summary>
-    /// HUD в игре: счёт «1 | ROUND 2 | 2», отсчёт и баннеры, полоса HP, лежит/падение, подъём союзника,
+    /// HUD в игре: панель команд со счётом и фрагами (TeamBar), отсчёт и баннеры, полоса HP, лежит/падение, подъём союзника,
     /// подсказка пульта, метки HELP! над лежащими союзниками (видны сквозь стены), мини-карта, разминка,
     /// броня над полосой HP, патроны пулемёта, ящики с припасами и маяк.
     /// </summary>
@@ -20,7 +20,7 @@ namespace RocketWars.UI
     {
         const float GoTime = 0.8f;
 
-        readonly VisualElement _screen, _score, _crosshair, _hp, _hpFill, _progress, _progressFill, _sosLayer;
+        readonly VisualElement _screen, _crosshair, _hp, _hpFill, _progress, _progressFill, _sosLayer;
         readonly VisualElement _minimap, _minimapMe, _helmetBrim, _binoculars, _scope;
         readonly Label _scopeDistance;
         readonly Label _protection, _binoDistance;
@@ -29,7 +29,8 @@ namespace RocketWars.UI
         readonly VisualElement[] _hitBars = new VisualElement[4];
         static readonly Color HitColor = Color.white, KillColor = new Color(1f, 0.2f, 0.15f);
         readonly Image _minimapImage;
-        readonly Label _score0, _score1, _round, _banner, _subbanner, _countdown, _hpText;
+        readonly TeamBar _teamBar;
+        readonly Label _banner, _subbanner, _countdown, _hpText;
         readonly Label _downed, _falling, _prompt, _info, _roomCode;
         readonly VisualElement _armor, _armorFill;
         readonly Label _armorText, _ammo, _loot, _beacon;
@@ -50,6 +51,43 @@ namespace RocketWars.UI
         const int FeedMax = 6;
         readonly VisualElement _feed;
         readonly List<(VisualElement row, float time)> _feedRows = new List<(VisualElement, float)>();
+
+        /// <summary>
+        /// Строку HUD собираем заново, только когда меняется её числовой ключ: иначе каждый кадр — десяток
+        /// новых строк и периодические подвисания от сборщика мусора.
+        /// </summary>
+        sealed class TextKey
+        {
+            long _key = long.MinValue;
+
+            public bool Changed(long key)
+            {
+                if (key == _key)
+                    return false;
+                _key = key;
+                return true;
+            }
+
+            /// <summary>Текст стёрли в обход ключа — следующий Changed обязательно вернёт true.</summary>
+            public void Reset() => _key = long.MinValue;
+        }
+
+        readonly TextKey _hpKey = new TextKey(), _armorKey = new TextKey(), _ammoKey = new TextKey(), _beaconKey = new TextKey();
+        readonly TextKey _infoKey = new TextKey(), _fallKey = new TextKey(), _distKey = new TextKey(), _countdownKey = new TextKey();
+        string _roomCodeSource, _countdownText = "";
+
+        // компоненты локального игрока (раньше — по GetComponent на каждый кадр)
+        NetworkPlayer _compsOf;
+        FallRespawn _fall;
+        ReviveInteraction _revive;
+        RocketRider _rider;
+        CrateInteraction _crates;
+        FlagInteraction _flags;
+        PistolView _pistol;
+        Binoculars _bino;
+        FpsController _fps;
+
+        static readonly RaycastHit[] Hits = new RaycastHit[32];
 
         public HudView(VisualElement root)
         {
@@ -119,10 +157,8 @@ namespace RocketWars.UI
                 _hitBars[i] = bar;
             }
 
-            _score = Ui.El(_screen, "score");
-            _score0 = Ui.Text(_score, "0 |", "score-num", "team0", "shadow");
-            _round = Ui.Text(_score, "ROUND 1", "score-round", "shadow");
-            _score1 = Ui.Text(_score, "| 0", "score-num", "team1", "shadow");
+            // счёт, раунд и игроки обеих команд с фрагами (как в Counter-Strike)
+            _teamBar = new TeamBar(_screen);
 
             _roomCode = Ui.Text(_screen, "", "room-code", "shadow");
             _info = Ui.Text(_screen, "", "info", "shadow");
@@ -139,10 +175,10 @@ namespace RocketWars.UI
             _banner = Ui.Text(_screen, "", "center-text", "banner", "shadow");
             _subbanner = Ui.Text(_screen, "", "center-text", "subbanner", "shadow");
             _countdown = Ui.Text(_screen, "", "center-text", "countdown", "shadow");
-            _downed = Ui.Text(_screen, "ВЫ ЛЕЖИТЕ — ждите союзника", "center-text", "downed", "shadow");
+            _downed = Ui.Text(_screen, Loc.T("ВЫ ЛЕЖИТЕ — ждите союзника"), "center-text", "downed", "shadow");
             _falling = Ui.Text(_screen, "", "center-text", "falling", "shadow");
             _prompt = Ui.Text(_screen, "", "center-text", "prompt", "shadow");
-            _protection = Ui.Text(_screen, "ЗАЩИТА ПОВЫШЕНА · урон -33%", "center-text", "protection", "shadow");
+            _protection = Ui.Text(_screen, Loc.T("ЗАЩИТА ПОВЫШЕНА · урон -33%"), "center-text", "protection", "shadow");
 
             _progress = Ui.El(_screen, "progress");
             _progressFill = Ui.El(_progress, "progress-fill");
@@ -185,24 +221,24 @@ namespace RocketWars.UI
 
         static string LootName(LootKind kind) => kind switch
         {
-            LootKind.MachineGun => "ПУЛЕМЁТ",
-            LootKind.Sniper => "СНАЙПЕРКА",
-            LootKind.Bazooka => "БАЗУКА",
-            LootKind.Armor => "БРОНЕЖИЛЕТ",
-            LootKind.Beacon => "МАЯК",
-            _ => "АПТЕЧКИ",
+            LootKind.MachineGun => Loc.T("ПУЛЕМЁТ"),
+            LootKind.Sniper => Loc.T("СНАЙПЕРКА"),
+            LootKind.Bazooka => Loc.T("БАЗУКА"),
+            LootKind.Armor => Loc.T("БРОНЕЖИЛЕТ"),
+            LootKind.Beacon => Loc.T("МАЯК"),
+            _ => Loc.T("АПТЕЧКИ"),
         };
 
         void OnLoot(LootKind kind)
         {
             _loot.text = kind switch
             {
-                LootKind.MachineGun => $"ПУЛЕМЁТ · {MachineGunSpec.Ammo} патронов",
-                LootKind.Sniper => $"СНАЙПЕРКА · {SniperSpec.Ammo} патрона · ПКМ - прицел ×4",
-                LootKind.Bazooka => $"БАЗУКА · {BazookaSpec.Ammo} заряда · осторожно, задевает своих",
-                LootKind.Armor => $"БРОНЕЖИЛЕТ · +{PlayerHealth.MaxArmor:0} брони",
-                LootKind.Beacon => "МАЯК · вражеские шахты видны на пульте",
-                _ => $"АПТЕЧКИ ×{LootCrate.MedkitCount} · E — вылечиться",
+                LootKind.MachineGun => Loc.F("ПУЛЕМЁТ · {0} патронов", MachineGunSpec.Ammo),
+                LootKind.Sniper => Loc.F("СНАЙПЕРКА · {0} патрона · ПКМ - прицел ×4", SniperSpec.Ammo),
+                LootKind.Bazooka => Loc.F("БАЗУКА · {0} заряда · осторожно, задевает своих", BazookaSpec.Ammo),
+                LootKind.Armor => Loc.F("БРОНЕЖИЛЕТ · +{0} брони", PlayerHealth.MaxArmor.ToString("0")),
+                LootKind.Beacon => Loc.T("МАЯК · вражеские шахты видны на пульте"),
+                _ => Loc.F("АПТЕЧКИ ×{0} · E — вылечиться", LootCrate.MedkitCount),
             };
             _lootTime = Time.time;
         }
@@ -221,7 +257,7 @@ namespace RocketWars.UI
             var icon = new Image { image = KillFeed.Icon(e.Kind), scaleMode = ScaleMode.ScaleToFit };
             icon.AddToClassList("feed-icon");
             row.Add(icon);
-            Ui.Text(row, e.Target, "feed-name", e.TargetTeam == 0 ? "team0" : "team1");
+            Ui.Text(row, KillFeed.TargetText(e), "feed-name", e.TargetTeam == 0 ? "team0" : "team1");
             foreach (var child in row.Children())
                 child.pickingMode = PickingMode.Ignore;
 
@@ -263,6 +299,7 @@ namespace RocketWars.UI
             var me = NetworkPlayer.LocalPlayer;
             var health = me != null ? me.Health : null;
             WatchLoot(me);
+            CacheComponents(me);
 
             UpdateMatch(health);
             UpdatePlayer(me, health);
@@ -272,7 +309,28 @@ namespace RocketWars.UI
             UpdateFeed();
 
             var session = SessionService.Current;
-            _roomCode.text = session != null ? $"Код комнаты: {session.Code}" : "";
+            string code = session != null ? session.Code : null;
+            if (!ReferenceEquals(code, _roomCodeSource))
+            {
+                _roomCodeSource = code;
+                _roomCode.text = code != null ? Loc.F("Код комнаты: {0}", code) : "";
+            }
+        }
+
+        void CacheComponents(NetworkPlayer me)
+        {
+            // часть компонентов LocalPlayerRig добавляет позже спавна (FlagInteraction — последним): до тех пор ищем заново
+            if (_compsOf == me && (me == null || _flags != null))
+                return;
+            _compsOf = me;
+            _fall = me != null ? me.GetComponent<FallRespawn>() : null;
+            _revive = me != null ? me.GetComponent<ReviveInteraction>() : null;
+            _rider = me != null ? me.GetComponent<RocketRider>() : null;
+            _crates = me != null ? me.GetComponent<CrateInteraction>() : null;
+            _flags = me != null ? me.GetComponent<FlagInteraction>() : null;
+            _pistol = me != null ? me.GetComponent<PistolView>() : null;
+            _bino = me != null ? me.GetComponent<Binoculars>() : null;
+            _fps = me != null ? me.GetComponent<FpsController>() : null;
         }
 
         void UpdateMatch(PlayerHealth health)
@@ -282,10 +340,7 @@ namespace RocketWars.UI
             var s = hasMatch ? match.State : default;
             int myTeam = health != null ? health.Team : -1;
 
-            Ui.Show(_score, hasMatch && s.Phase != MatchPhase.Lobby);
-            _score0.text = $"{s.Score0} |";
-            _score1.text = $"| {s.Score1}";
-            _round.text = $"ROUND {s.Round}";
+            _teamBar.Update(hasMatch && s.Phase != MatchPhase.Lobby, s);
 
             string banner = "", sub = "", countdown = "";
             Color bannerColor = Color.white;
@@ -294,25 +349,28 @@ namespace RocketWars.UI
                 switch (s.Phase)
                 {
                     case MatchPhase.Lobby:
-                        banner = "РАЗМИНКА";
+                        banner = Loc.T("РАЗМИНКА");
                         sub = LobbyText(match);
                         break;
                     case MatchPhase.Countdown:
-                        countdown = $"{Mathf.Max(1, Mathf.CeilToInt((float)(s.PhaseEnd - NetClock.Now)))}...";
+                        int left = Mathf.Max(1, Mathf.CeilToInt((float)(s.PhaseEnd - NetClock.Now)));
+                        if (_countdownKey.Changed(left))
+                            _countdownText = $"{left}...";
+                        countdown = _countdownText;
                         break;
                     case MatchPhase.Round:
                         if (NetClock.Now - s.PhaseEnd < GoTime)
                             countdown = "GO!";
                         break;
                     case MatchPhase.RoundEnd:
-                        banner = s.Winner < 0 ? "НИЧЬЯ" : $"РАУНД ВЫИГРАЛИ {RuntimeMaterials.TeamName(s.Winner)}";
-                        sub = s.Winner < 0 ? "раунд переигрывается" : "";
+                        banner = s.Winner < 0 ? Loc.T("НИЧЬЯ") : Loc.F("РАУНД ВЫИГРАЛИ {0}", RuntimeMaterials.TeamName(s.Winner));
+                        sub = s.Winner < 0 ? Loc.T("раунд переигрывается") : "";
                         if (s.Winner >= 0) bannerColor = RuntimeMaterials.TeamColor(s.Winner);
                         break;
                     case MatchPhase.MatchEnd:
-                        banner = myTeam < 0 ? $"ПОБЕДИЛИ {RuntimeMaterials.TeamName(s.Winner)}" : myTeam == s.Winner ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
+                        banner = myTeam < 0 ? Loc.F("ПОБЕДИЛИ {0}", RuntimeMaterials.TeamName(s.Winner)) : myTeam == s.Winner ? Loc.T("ПОБЕДА!") : Loc.T("ПОРАЖЕНИЕ");
                         bannerColor = RuntimeMaterials.TeamColor(s.Winner);
-                        sub = match.IsServer ? "Enter — новый матч, Tab — итоги" : "Tab — итоги";
+                        sub = match.IsServer ? Loc.T("Enter — новый матч, Tab — итоги") : Loc.T("Tab — итоги");
                         break;
                 }
             }
@@ -334,8 +392,8 @@ namespace RocketWars.UI
                 }
             string teams = $"{RuntimeMaterials.TeamName(0)}: {n0}   ·   {RuntimeMaterials.TeamName(1)}: {n1}";
             if (!match.IsServer)
-                return $"{teams}\nМатч начнёт хост";
-            return $"{teams}\n{match.StartBlocker() ?? "Enter — начать матч"}";
+                return $"{teams}\n{Loc.T("Матч начнёт хост")}";
+            return $"{teams}\n{match.StartBlocker() ?? Loc.T("Enter — начать матч")}";
         }
 
         void UpdatePlayer(NetworkPlayer me, PlayerHealth health)
@@ -349,66 +407,71 @@ namespace RocketWars.UI
             {
                 float k = health.Hp / PlayerHealth.MaxHp;
                 _hpFill.style.width = Length.Percent(k * 100f);
-                _hpText.text = Mathf.CeilToInt(health.Hp).ToString();
+                int hp = Mathf.CeilToInt(health.Hp);
+                if (_hpKey.Changed(hp))
+                    _hpText.text = hp.ToString();
             }
             UpdateLoot(me, health);
 
-            var fall = me != null ? me.GetComponent<FallRespawn>() : null;
-            _falling.text = fall != null && fall.IsFalling ? $"Падение… {fall.TimeLeft:0.0}" : "";
+            var fall = _fall;
+            bool isFalling = fall != null && fall.IsFalling;
+            if (_fallKey.Changed(isFalling ? Mathf.RoundToInt(fall.TimeLeft * 10f) : -1))
+                _falling.text = isFalling ? Loc.F("Падение… {0}", fall.TimeLeft.ToString("0.0")) : "";
 
             // подъём союзника важнее подсказки пульта
-            var revive = me != null ? me.GetComponent<ReviveInteraction>() : null;
+            var revive = _revive;
             var interactor = PlayerInteractor.Local;
             string prompt = "";
             bool showProgress = false;
             if (revive != null && revive.Target != null)
             {
-                prompt = revive.IsReviving ? $"Поднимаем {revive.Target.DisplayName}…" : $"Удерживайте E — поднять {revive.Target.DisplayName}";
+                prompt = revive.IsReviving ? Loc.F("Поднимаем {0}…", revive.Target.DisplayName) : Loc.F("Удерживайте E — поднять {0}", revive.Target.DisplayName);
                 showProgress = true;
                 _progressFill.style.width = Length.Percent(revive.Progress01 * 100f);
             }
-            else if (me != null && me.GetComponent<RocketRider>() is RocketRider rider && (rider.IsRiding || rider.HasGrabTarget))
+            else if (me != null && _rider is RocketRider rider && (rider.IsRiding || rider.HasGrabTarget))
             {
-                prompt = rider.IsRiding ? "Отпустите E — отцепиться от ракеты"
-                    : rider.TargetFull ? "На ракете нет места (4 из 4)"
-                    : "Удерживайте E — схватиться за ракету";
+                prompt = rider.InFlight ? Loc.T("Отпустите E — спрыгнуть · Q — трюк")
+                    : rider.IsRiding ? Loc.T("Отпустите E — спрыгнуть")
+                    : rider.TargetFull ? Loc.T("На ракете нет места (4 из 4)")
+                    : Loc.T("Удерживайте E — сесть на ракету");
             }
             else if (me != null && me.ParachuteOpen)
             {
-                prompt = "Пробел — отстегнуть парашют";
+                prompt = Loc.T("Пробел — отстегнуть парашют");
             }
-            else if (me != null && me.GetComponent<CrateInteraction>() is CrateInteraction crates && crates.Target != null)
+            else if (me != null && _crates is CrateInteraction crates && crates.Target != null)
             {
                 var crate = crates.Target;
                 if (crate.State == CrateState.Closed)
                 {
-                    prompt = crates.IsOpening ? "Открываем ящик…" : "Удерживайте E — открыть ящик";
+                    prompt = crates.IsOpening ? Loc.T("Открываем ящик…") : Loc.T("Удерживайте E — открыть ящик");
                     showProgress = true;
                     _progressFill.style.width = Length.Percent(crates.Progress01 * 100f);
                 }
                 else if (crate.HasItem)
                 {
-                    prompt = $"E - взять: {LootName(crate.Kind)}";
+                    prompt = Loc.F("E - взять: {0}", LootName(crate.Kind));
                 }
                 else
                 {
                     prompt = health != null && health.Hp >= PlayerHealth.MaxHp
-                        ? $"Аптечек в ящике: {crate.Medkits} · здоровье полное"
-                        : $"E — аптечка +{LootCrate.MedkitHeal:0} HP (в ящике: {crate.Medkits})";
+                        ? Loc.F("Аптечек в ящике: {0} · здоровье полное", crate.Medkits)
+                        : Loc.F("E — аптечка +{0} HP (в ящике: {1})", LootCrate.MedkitHeal.ToString("0"), crate.Medkits);
                 }
             }
-            else if (me != null && me.GetComponent<FlagInteraction>() is FlagInteraction flags && flags.Target != null)
+            else if (me != null && _flags is FlagInteraction flags && flags.Target != null)
             {
-                prompt = $"E - забрать флаг {RuntimeMaterials.TeamNameGenitive(flags.Target.Team)}";
+                prompt = Loc.F("E - забрать флаг {0}", RuntimeMaterials.TeamNameGenitive(flags.Target.Team));
             }
             else if (interactor != null && interactor.Hovered != null)
             {
                 var b = interactor.Hovered;
                 string name = b.Kind == ConsoleButtonKind.Launch ? "LAUNCH" : b.Kind.ToString();
-                prompt = b.IsInteractable ? $"ЛКМ — нажать {name}"
-                    : b.Console.IsLockedFor(NetClock.LocalClientId) ? "Пультом пользуется другой игрок"
-                    : !MatchManager.ConsolesEnabled ? "Пульты включатся в начале раунда"
-                    : $"{name} недоступна";
+                prompt = b.IsInteractable ? Loc.F("ЛКМ — нажать {0}", name)
+                    : b.Console.IsLockedFor(NetClock.LocalClientId) ? Loc.T("Пультом пользуется другой игрок")
+                    : !MatchManager.ConsolesEnabled ? Loc.T("Пульты включатся в начале раунда")
+                    : Loc.F("{0} недоступна", name);
             }
             _prompt.text = prompt;
             Ui.Show(_progress, showProgress);
@@ -417,6 +480,7 @@ namespace RocketWars.UI
             if (health == null)
             {
                 _info.text = "";
+                _infoKey.Reset();
                 return;
             }
 
@@ -434,9 +498,14 @@ namespace RocketWars.UI
                     nextReload = Mathf.Min(nextReload, silo.ReloadLeft);
                 }
             }
-            string reload = reloading > 0 ? $" · перезарядка: {reloading} (ближайшая {Mathf.CeilToInt(nextReload)} с)" : "";
-            _info.text = $"Команда: {RuntimeMaterials.TeamName(health.Team)}\nШахт: {alivesilos} · готово: {ready}{reload}\n" +
-                         "Tab — итоги · Esc — пауза";
+            int next = reloading > 0 ? Mathf.CeilToInt(nextReload) : 0;
+            if (_infoKey.Changed((uint)health.Team | (long)alivesilos << 8 | (long)ready << 16 | (long)reloading << 24 | (long)next << 32))
+            {
+                string reload = reloading > 0 ? Loc.F(" · перезарядка: {0} (ближайшая {1} с)", reloading, next) : "";
+                _info.text = Loc.F("Команда: {0}", RuntimeMaterials.TeamName(health.Team)) + "\n" +
+                             Loc.F("Шахт: {0} · готово: {1}", alivesilos, ready) + reload + "\n" +
+                             Loc.T("Tab — итоги · Esc — пауза");
+            }
         }
 
         /// <summary>Броня над полосой HP, патроны пулемёта, что выпало из ящика, таймер маяка.</summary>
@@ -447,58 +516,78 @@ namespace RocketWars.UI
             // у берсерка брони 200 — полоса считается от неё, а не от бронежилета (100)
             float armorMax = Mathf.Max(PlayerHealth.MaxArmor, me != null && me.IsBerserk ? BerserkSpec.Armor : 0f);
             _armorFill.style.width = Length.Percent(Mathf.Clamp01(armor / armorMax) * 100f);
-            _armorText.text = $"БРОНЯ {Mathf.CeilToInt(armor)}";
+            int armorValue = Mathf.CeilToInt(armor);
+            if (armorValue > 0 && _armorKey.Changed(armorValue))
+                _armorText.text = Loc.F("БРОНЯ {0}", armorValue);
 
-            var weapon = me != null ? me.GetComponent<PistolView>() : null;
+            var weapon = _pistol;
             bool gold = weapon != null && weapon.HoldingGoldGuns && health != null && !health.IsDowned;
             bool gun = !gold && weapon != null && weapon.HoldingMachineGun && health != null && !health.IsDowned;
             bool sniper = !gold && weapon != null && weapon.HoldingSniper && health != null && !health.IsDowned;
             bool bazooka = !gold && weapon != null && weapon.HoldingBazooka && health != null && !health.IsDowned;
             Ui.Show(_ammo, gun || gold || sniper || bazooka);
-            if (gold)
-                _ammo.text = "ЗОЛОТЫЕ ПУЛЕМЁТЫ  БЕЗ ЛИМИТА";
-            else if (sniper)
-                _ammo.text = $"СНАЙПЕРКА  {weapon.SniperAmmo} / {SniperSpec.Ammo}";
-            else if (bazooka)
-                _ammo.text = $"БАЗУКА  {weapon.BazookaAmmo} / {BazookaSpec.Ammo}";
-            else if (gun)
-                _ammo.text = $"ПУЛЕМЁТ  {weapon.MachineGunAmmo} / {MachineGunSpec.Ammo}";
+            // ключ: оружие (1–4) и остаток патронов
+            long ammoKey = gold ? 1 : sniper ? 2L << 32 | (uint)weapon.SniperAmmo : bazooka ? 3L << 32 | (uint)weapon.BazookaAmmo
+                : gun ? 4L << 32 | (uint)weapon.MachineGunAmmo : 0;
+            if (_ammoKey.Changed(ammoKey))
+            {
+                if (gold)
+                    _ammo.text = Loc.T("ЗОЛОТЫЕ ПУЛЕМЁТЫ  БЕЗ ЛИМИТА");
+                else if (sniper)
+                    _ammo.text = $"{Loc.T("СНАЙПЕРКА")}  {weapon.SniperAmmo} / {SniperSpec.Ammo}";
+                else if (bazooka)
+                    _ammo.text = $"{Loc.T("БАЗУКА")}  {weapon.BazookaAmmo} / {BazookaSpec.Ammo}";
+                else if (gun)
+                    _ammo.text = $"{Loc.T("ПУЛЕМЁТ")}  {weapon.MachineGunAmmo} / {MachineGunSpec.Ammo}";
+            }
 
             float since = Time.time - _lootTime;
             Ui.Show(_loot, since < LootToastTime);
             _loot.style.opacity = Mathf.Clamp01((LootToastTime - since) / 0.5f);
 
             float beacon = me != null ? me.BeaconTimeLeft : 0f;
-            var carrying = me != null ? me.GetComponent<FlagInteraction>() : null;
+            var carrying = _flags;
             bool flag = carrying != null && carrying.Carrying != null;
             bool berserk = me != null && me.IsBerserk;
-            Ui.Show(_beacon, beacon > 0f || flag || berserk);
+            bool showBeacon = beacon > 0f || flag || berserk;
+            Ui.Show(_beacon, showBeacon);
+            // ключ: что показываем (флаг какой команды / превращение / берсерк / маяк) и секунды
+            long beaconKey = !showBeacon ? -1
+                : flag ? 1L << 32 | (uint)carrying.Carrying.Team
+                : berserk ? (me.InBerserkTransform ? 2L << 32 : 3L << 32 | (uint)Mathf.CeilToInt(me.BerserkTimeLeft))
+                : 4L << 32 | (uint)Mathf.CeilToInt(beacon);
+            if (!_beaconKey.Changed(beaconKey) || !showBeacon)
+                return;
             _beacon.text = flag
-                ? $"ВЫ НЕСЁТЕ ФЛАГ {RuntimeMaterials.TeamNameGenitive(carrying.Carrying.Team)} - доставьте его на свой остров"
+                ? Loc.F("ВЫ НЕСЁТЕ ФЛАГ {0} - доставьте его на свой остров", RuntimeMaterials.TeamNameGenitive(carrying.Carrying.Team))
                 : berserk
-                    ? (me.InBerserkTransform ? "ПРЕВРАЩЕНИЕ В БЕРСЕРКА!" : $"РЕЖИМ БЕРСЕРКА - {Mathf.CeilToInt(me.BerserkTimeLeft)} с")
-                    : $"МАЯК: вражеские шахты на пульте - {Mathf.CeilToInt(beacon)} с";
+                    ? (me.InBerserkTransform ? Loc.T("ПРЕВРАЩЕНИЕ В БЕРСЕРКА!") : Loc.F("РЕЖИМ БЕРСЕРКА - {0} с", Mathf.CeilToInt(me.BerserkTimeLeft)))
+                    : Loc.F("МАЯК: вражеские шахты на пульте - {0} с", Mathf.CeilToInt(beacon));
         }
 
         /// <summary>В приседе сверху опускается край каски и выводится, что защита повышена.</summary>
         void UpdateHelmet(NetworkPlayer me, PlayerHealth health)
         {
             // бинокль у глаз: маска окуляров вместо прицела и каски
-            var bino = me != null ? me.GetComponent<Binoculars>() : null;
+            var bino = _bino;
             float b = bino != null ? bino.Amount : 0f;
             bool scope = bino != null && bino.IsScope;
             Ui.Show(_binoculars, b > 0.01f && !scope);
             _binoculars.style.opacity = b;
             Ui.Show(_scope, b > 0.01f && scope);
             _scope.style.opacity = b;
-            string distance = bino != null && bino.Distance > 0f ? $"ДИСТ {bino.Distance:0} м" : "ДИСТ —";
-            _binoDistance.text = distance;
-            _scopeDistance.text = distance;
+            bool hasDistance = bino != null && bino.Distance > 0f;
+            if (_distKey.Changed(hasDistance ? Mathf.RoundToInt(bino.Distance) : -1))
+            {
+                string distance = hasDistance ? Loc.F("ДИСТ {0} м", bino.Distance.ToString("0")) : Loc.T("ДИСТ —");
+                _binoDistance.text = distance;
+                _scopeDistance.text = distance;
+            }
             if (b > 0.5f)
                 Ui.Show(_crosshair, false);
 
             // маркер попадания из пистолета
-            var pistol = me != null ? me.GetComponent<PistolView>() : null;
+            var pistol = _pistol;
             float sinceHit = pistol != null ? Time.time - pistol.LastHitTime : 99f;
             bool hitShown = sinceHit < PistolView.HitMarkerTime;
             Ui.Show(_hitMarker, hitShown);
@@ -513,7 +602,7 @@ namespace RocketWars.UI
                     bar.style.backgroundColor = kill ? KillColor : HitColor;
             }
 
-            var fps = me != null ? me.GetComponent<FpsController>() : null;
+            var fps = _fps;
             float k = fps != null && health != null && !health.IsDowned && b < 0.5f ? fps.CrouchAmount : 0f;
             // плавный «въезд»: при k = 0 каска целиком за верхним краем экрана
             _helmetBrim.style.translate = new Translate(0, Length.Percent(-105f * (1f - k)));
@@ -618,9 +707,10 @@ namespace RocketWars.UI
         {
             Vector3 dir = head - eye;
             float length = dir.magnitude;
-            foreach (var hit in Physics.RaycastAll(eye, dir / length, length, ~0, QueryTriggerInteraction.Ignore))
+            int count = Physics.RaycastNonAlloc(eye, dir / length, Hits, length, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
             {
-                var owner = hit.collider.GetComponentInParent<PlayerHealth>();
+                var owner = Hits[i].collider.GetComponentInParent<PlayerHealth>();
                 if (owner == target || (me != null && owner == me.Health))
                     continue;
                 return false;
@@ -634,10 +724,13 @@ namespace RocketWars.UI
             public VisualElement Root;
             public Label Badge, Distance;
             public Label[] Rising;
+            public int Meters = -1;
         }
 
         const float HelpRisePeriod = 1.2f;
         const float HelpRiseHeight = 140f;
+        /// <summary>Метка в полный размер ближе HelpNear метров и вчетверо меньше дальше HelpFar (союзник на другом острове).</summary>
+        const float HelpNear = 15f, HelpFar = 45f, HelpFarScale = 0.25f;
 
         HelpMarker CreateHelpMarker()
         {
@@ -672,7 +765,16 @@ namespace RocketWars.UI
                     var m = _helpPool[used++];
                     Ui.Show(m.Root, true);
                     Ui.Place(m.Root, pos.Value);
-                    m.Distance.text = $"{Vector3.Distance(cam.transform.position, p.transform.position):0} м";
+                    int meters = Mathf.RoundToInt(Vector3.Distance(cam.transform.position, p.transform.position));
+                    if (m.Meters != meters)
+                    {
+                        m.Meters = meters;
+                        m.Distance.text = Loc.F("{0} м", meters);
+                        // издалека метка мельчает (точка привязки 0×0 — масштаб вокруг неё), расстояние остаётся читаемым
+                        float size = Mathf.Lerp(1f, HelpFarScale, Mathf.InverseLerp(HelpNear, HelpFar, meters));
+                        m.Root.style.scale = new Scale(Vector3.one * size);
+                        m.Distance.style.scale = new Scale(Vector3.one * Mathf.Max(1f, 0.6f / size));
+                    }
 
                     // плашка слегка пульсирует, у каждого лежащего — со своей фазой
                     float phase = p.NetworkObjectId * 0.37f;

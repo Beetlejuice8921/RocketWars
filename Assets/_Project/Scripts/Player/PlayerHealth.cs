@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using RocketWars.Combat;
+using RocketWars.Core;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -28,14 +29,31 @@ namespace RocketWars.Player
 
         public static readonly List<PlayerHealth> All = new List<PlayerHealth>();
 
-        readonly NetworkVariable<float> _hp = new NetworkVariable<float>(MaxHp);
-        readonly NetworkVariable<float> _armor = new NetworkVariable<float>(0f);
+        // HP и броня зашифрованы в памяти (ObscuredFloat): иначе хост нашёл бы «100» ArtMoney и стал бессмертным
+        readonly NetworkVariable<ObscuredFloat> _hp = new NetworkVariable<ObscuredFloat>(MaxHp);
+        readonly NetworkVariable<ObscuredFloat> _armor = new NetworkVariable<ObscuredFloat>(0f);
         readonly NetworkVariable<PlayerState> _state = new NetworkVariable<PlayerState>(PlayerState.Alive);
         readonly NetworkVariable<int> _team = new NetworkVariable<int>();
         readonly NetworkVariable<FixedString32Bytes> _name = new NetworkVariable<FixedString32Bytes>();
 
         public int Team => _team.Value;
-        public string DisplayName => _name.Value.ToString();
+        // ник читают каждый кадр (HUD, панель команд) — строку собираем только при смене имени
+        FixedString32Bytes _displayNameSource;
+        string _displayName = "";
+
+        public string DisplayName
+        {
+            get
+            {
+                var name = _name.Value;
+                if (name != _displayNameSource)
+                {
+                    _displayNameSource = name;
+                    _displayName = name.ToString();
+                }
+                return _displayName;
+            }
+        }
         public float Hp => _hp.Value;
         public float Armor => _armor.Value;
         public PlayerState State => _state.Value;
@@ -77,10 +95,10 @@ namespace RocketWars.Player
             _state.OnValueChanged -= OnStateChanged;
         }
 
-        void OnHpChanged(float oldValue, float newValue)
+        void OnHpChanged(ObscuredFloat oldValue, ObscuredFloat newValue)
         {
             if (newValue < oldValue)
-                Hurt?.Invoke(oldValue - newValue);
+                Hurt?.Invoke(oldValue.Value - newValue.Value);
         }
 
         void OnStateChanged(PlayerState oldValue, PlayerState newValue) => StateChanged?.Invoke(newValue);

@@ -45,6 +45,20 @@ namespace RocketWars.Loot
         public override int GetHashCode() => HashCode.Combine(State, Items);
     }
 
+    /// <summary>Ящик, сброшенный с неба посреди раунда: где, что внутри и когда начал опускаться.</summary>
+    public struct CrateDrop : INetworkSerializeByMemcpy, IEquatable<CrateDrop>
+    {
+        public int RoundId;
+        public double StartTime;
+        public short X, Z;
+        public byte Team, Kind, YawStep;
+
+        public bool Equals(CrateDrop o) => RoundId == o.RoundId && StartTime.Equals(o.StartTime) && X == o.X && Z == o.Z &&
+                                           Team == o.Team && Kind == o.Kind && YawStep == o.YawStep;
+        public override bool Equals(object obj) => obj is CrateDrop o && Equals(o);
+        public override int GetHashCode() => HashCode.Combine(RoundId, X, Z, Team);
+    }
+
     /// <summary>
     /// Ящик с припасами размером в один кубик. Открывается удержанием E 1,5 с: крышка откидывается, видно содержимое.
     /// HP 1000, повреждают его только взрывы. Если из-под ящика выбили землю — падает ниже (или с острова).
@@ -64,6 +78,12 @@ namespace RocketWars.Loot
         const float ItemTakeTime = 0.3f;
         const float FallGravity = -20f;
 
+        /// <summary>Сброс с неба: с какой высоты над землёй и с какой скоростью опускается на парашютике.</summary>
+        public const float DropHeight = 45f;
+        public const float DropSpeed = 4f;
+        const float ChuteScale = 0.45f;
+        const float ChuteFoldTime = 0.5f;
+
         public static readonly List<LootCrate> All = new List<LootCrate>();
 
         public int NetIndex { get; set; }
@@ -77,7 +97,9 @@ namespace RocketWars.Loot
         public bool HasItem => Kind != LootKind.Medkits && Items > 0;
         public float Hp { get; private set; } = MaxHp;
         public VoxelIsland Island { get; private set; }
-        public bool IsFalling => _falling;
+        public bool IsFalling => _falling || _airborne;
+        /// <summary>Клетка острова, на которой стоит (или куда опускается) ящик.</summary>
+        public Vector2 Cell => new Vector2(_cellX, _cellZ);
         /// <summary>Центр ящика (для расстояний и подсказок).</summary>
         public Vector3 Center => transform.position + Vector3.up * 0.5f;
 
@@ -87,6 +109,11 @@ namespace RocketWars.Loot
         float _fallSpeed, _restY;
         bool _falling, _intoVoid;
         int _cellX, _cellZ;
+        // сброс с неба: высоту считаем от общего сетевого времени, чтобы у всех ящик опускался одинаково
+        bool _airborne;
+        double _dropStart;
+        float _dropBaseY, _yaw, _chuteFold = -1f;
+        Transform _chute;
 
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);
@@ -114,9 +141,29 @@ namespace RocketWars.Loot
             crate._cellX = x;
             crate._cellZ = z;
             crate._restY = go.transform.position.y;
+            crate._yaw = yaw;
             crate.Items = kind == LootKind.Medkits ? MedkitCount : 1;
             crate.BuildContents();
             island.BlocksChanged += crate.CheckSupport;
+            return crate;
+        }
+
+        /// <summary>
+        /// Ящик, сброшенный с неба в момент startTime (NetClock): опускается на мини-парашюте с высоты DropHeight.
+        /// Если сброс уже давно был (поздний вход) — сразу стоит на земле.
+        /// </summary>
+        public static LootCrate CreateAirDrop(VoxelIsland island, int x, int z, LootKind kind, float yaw, Transform parent, double startTime)
+        {
+            var crate = Create(island, x, z, kind, yaw, parent);
+            island.ClearGrass(x, z, x, z);
+            crate._airborne = true;
+            crate._dropStart = startTime;
+            crate._dropBaseY = crate._restY;
+
+            var (chuteMesh, chuteMats) = Models.Parachute();
+            crate._chute = BoxModel.Spawn(chuteMesh, chuteMats, crate.transform, new Vector3(0f, 0.3f, 0f), "Parachute").transform;
+            crate._chute.localScale = Vector3.one * ChuteScale;
+            crate.UpdateAirDrop();
             return crate;
         }
 
@@ -197,7 +244,7 @@ namespace RocketWars.Loot
         /// <summary>Сервер: открыть ящик. false — уже открыт/разбит.</summary>
         public bool ServerOpen()
         {
-            if (!IsAuthority || State != CrateState.Closed || _falling)
+            if (!IsAuthority || State != CrateState.Closed || IsFalling)
                 return false;
             SetState(CrateState.Open);
             return true;
@@ -286,7 +333,7 @@ namespace RocketWars.Loot
             for (int i = 0; i < 6; i++)
             {
                 pieces.Add(Center + UnityEngine.Random.insideUnitSphere * 0.4f);
-                kinds.Add(BlockKind.Dirt);
+                kinds.Add(BlockKind.Wood);
             }
             VoxelFx.Debris(Center, pieces, kinds);
             gameObject.SetActive(false);
@@ -301,11 +348,16 @@ namespace RocketWars.Loot
             if (top == 0)
             {
                 _intoVoid = true;
-                _falling = true;
+                _falling = !_airborne; // ещё в воздухе — дальше опускается на парашюте, мимо острова
                 _restY = float.NegativeInfinity;
                 return;
             }
             float y = Island.transform.position.y + top;
+            if (_airborne)
+            {
+                _restY = Mathf.Min(_restY, y); // приземлится на новый верх столбца
+                return;
+            }
             if (y < transform.position.y - 0.01f)
             {
                 _restY = y;
@@ -315,8 +367,11 @@ namespace RocketWars.Loot
 
         void Update()
         {
-            if (_falling)
+            if (_airborne)
+                UpdateAirDrop();
+            else if (_falling)
                 UpdateFall();
+            UpdateChuteFold();
 
             // крышка неподвижна, пока ящик открывают (идёт полоса загрузки), и откидывается после открытия
             float target = State == CrateState.Open ? LidOpenAngle : 0f;
@@ -336,6 +391,59 @@ namespace RocketWars.Loot
                     _item.localScale = Vector3.one * ItemScale(Kind) * (1f - k * k);
                 }
             }
+        }
+
+        /// <summary>Спуск на парашютике: покачивается под куполом, у земли купол складывается.</summary>
+        void UpdateAirDrop()
+        {
+            float t = (float)(Net.NetClock.Now - _dropStart);
+            float y = _dropBaseY + DropHeight - DropSpeed * Mathf.Max(0f, t);
+            var p = transform.position;
+            if (y <= _restY)
+            {
+                p.y = _restY;
+                transform.position = p;
+                transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+                _airborne = false;
+                _chuteFold = 0f;
+                if (t < DropHeight / DropSpeed + 1f) // поздний вход — без звука и пыли
+                    Sfx.PlayAt(Sfx.CrateOpen, Center, 0.5f, 30f, 0.6f);
+                return;
+            }
+
+            p.y = y;
+            transform.position = p;
+            // маятник под куполом; к земле качание затухает
+            float sway = Mathf.Clamp01((y - _restY) / 6f);
+            float phase = NetIndex * 1.7f;
+            transform.rotation = Quaternion.Euler(Mathf.Sin(t * 1.9f + phase) * 7f * sway, _yaw + Mathf.Sin(t * 0.7f + phase) * 10f,
+                Mathf.Cos(t * 1.5f + phase) * 6f * sway);
+
+            if (_intoVoid && p.y < Island.transform.position.y - 60f)
+            {
+                _airborne = false;
+                if (IsAuthority)
+                    SetState(CrateState.Destroyed);
+                else
+                    gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>Приземлился — купол оседает набок и пропадает.</summary>
+        void UpdateChuteFold()
+        {
+            if (_chute == null || _chuteFold < 0f)
+                return;
+            _chuteFold += Time.deltaTime / ChuteFoldTime;
+            if (_chuteFold >= 1f)
+            {
+                Destroy(_chute.gameObject);
+                _chute = null;
+                return;
+            }
+            float k = _chuteFold;
+            _chute.localScale = new Vector3(ChuteScale * (1f + 0.3f * k), ChuteScale * (1f - k), ChuteScale * (1f - 0.6f * k));
+            _chute.localRotation = Quaternion.Euler(0f, 0f, 40f * k);
         }
 
         void UpdateFall()

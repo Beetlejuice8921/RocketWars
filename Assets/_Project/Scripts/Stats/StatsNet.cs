@@ -161,7 +161,7 @@ namespace RocketWars.Stats
         void OnSiloDestroyed(RocketSilo silo, DamageInfo info)
         {
             var destroyer = info.Source != null ? info.Source.GetComponent<PlayerHealth>() : null;
-            Feed(FeedKind.Silo, destroyer, $"шахта {RuntimeMaterials.TeamNameGenitive(silo.Team)}", silo.Team, ulong.MaxValue);
+            Feed(FeedKind.Silo, destroyer, "", silo.Team, ulong.MaxValue); // подпись «шахта КРАСНЫХ» собирает клиент на своём языке
 
             if (!Counting || info.Source == null || !info.Source.TryGetComponent(out PlayerHealth attacker))
                 return;
@@ -172,8 +172,8 @@ namespace RocketWars.Stats
         /// <summary>Флаг забрали / уронили / доставили / вернулся на базу — строка в ленте.</summary>
         void OnFlagEvent(TeamFlag flag, string what, PlayerHealth actor)
         {
-            string flagName = $"флаг {RuntimeMaterials.TeamNameGenitive(flag.Team)}";
-            Feed(FeedKind.Flag, actor, actor != null ? $"{what} {flagName}" : $"{flagName} на базе", flag.Team, ulong.MaxValue);
+            // по сети идёт только глагол-ключ, подпись собирает клиент на своём языке (KillFeed.TargetText)
+            Feed(FeedKind.Flag, actor, actor != null ? what : "", flag.Team, ulong.MaxValue);
         }
 
         // ---------- лента событий ----------

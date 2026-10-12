@@ -1,3 +1,4 @@
+using RocketWars.Core;
 using UnityEngine;
 
 namespace RocketWars.Stats
@@ -28,5 +29,10 @@ namespace RocketWars.Stats
         public Color color = Color.white;
         [Tooltip("1–2 символа на значке")]
         public string badge;
+
+        // в ассете — русский текст, он же ключ перевода
+        public string Title => Loc.T(title);
+        public string Description => Loc.T(description);
+        public string Badge => Loc.T(badge);
     }
 }

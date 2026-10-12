@@ -11,6 +11,14 @@ using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
+    /// <summary>Действие с удержанием E, время которого проверяет сервер.</summary>
+    public enum HoldKind : byte
+    {
+        None,
+        Revive,
+        Crate
+    }
+
     /// <summary>
     /// Сетевой «хаб» игрока: кто им управляет (владелец / бот), синхронизация приседа и
     /// все запросы клиента к серверу (падение, подъём союзника, кнопки пульта, выстрелы, ящики с припасами).
@@ -64,9 +72,21 @@ namespace RocketWars.Player
         readonly NetworkVariable<bool> _parachute = new NetworkVariable<bool>(false,
             NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        /// <summary>Трюк на ракете (зажат Q в полёте) — видят все.</summary>
+        readonly NetworkVariable<byte> _trick = new NetworkVariable<byte>(0,
+            NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
         public int RideSilo => IsSpawned ? _rideSilo.Value : -1;
         public int RideSlot => _rideSlot.Value;
         public bool IsRiding => RideSilo >= 0;
+        public RideTrick RideTrick => IsRiding ? (RideTrick)_trick.Value : RideTrick.None;
+
+        /// <summary>Владелец: начал / закончил трюк (ставит RocketRider).</summary>
+        public void SetTrick(RideTrick trick)
+        {
+            if (IsOwner && IsSpawned && _trick.Value != (byte)trick)
+                _trick.Value = (byte)trick;
+        }
         public bool ParachuteOpen => IsSpawned && _parachute.Value;
 
         // ---------- берсерк (награда за доставленный флаг) ----------
@@ -143,18 +163,18 @@ namespace RocketWars.Player
             }
         }
 
-        /// <summary>Патроны пулемёта из ящика (0 — в руках пистолет). Пишет сервер, видят все.</summary>
-        readonly NetworkVariable<byte> _machineGunAmmo = new NetworkVariable<byte>(0);
+        /// <summary>Патроны пулемёта из ящика (0 — в руках пистолет). Пишет сервер, видят все; в памяти зашифрованы.</summary>
+        readonly NetworkVariable<ObscuredInt> _machineGunAmmo = new NetworkVariable<ObscuredInt>(0);
         public int MachineGunAmmo => _machineGunAmmo.Value;
         public bool HasMachineGun => IsSpawned && _machineGunAmmo.Value > 0;
 
         /// <summary>Патроны снайперки из ящика; пока они есть, в руках снайперка (она важнее пулемёта).</summary>
-        readonly NetworkVariable<byte> _sniperAmmo = new NetworkVariable<byte>(0);
+        readonly NetworkVariable<ObscuredInt> _sniperAmmo = new NetworkVariable<ObscuredInt>(0);
         public int SniperAmmo => _sniperAmmo.Value;
         public bool HasSniper => IsSpawned && _sniperAmmo.Value > 0;
 
         /// <summary>Заряды базуки из ящика; пока они есть, в руках базука (важнее снайперки и пулемёта).</summary>
-        readonly NetworkVariable<byte> _bazookaAmmo = new NetworkVariable<byte>(0);
+        readonly NetworkVariable<ObscuredInt> _bazookaAmmo = new NetworkVariable<ObscuredInt>(0);
         public int BazookaAmmo => _bazookaAmmo.Value;
         public bool HasBazooka => IsSpawned && _bazookaAmmo.Value > 0;
 
@@ -207,6 +227,9 @@ namespace RocketWars.Player
                 _isBot.Value = _pendingBot;
                 Bullet.ServerHit += OnServerBulletHit;
                 TeamFlag.FlagDelivered += OnFlagDelivered;
+                // движение удалённых игроков считают их клиенты — сервер проверяет скорость (боты — свои)
+                if (!IsOwner)
+                    gameObject.AddComponent<MovementGuard>();
             }
             _fps.IsLocal = IsLocalHuman;
             _fps.Simulate = IsOwner;
@@ -289,6 +312,47 @@ namespace RocketWars.Player
                 MatchManager.Instance.DebugRestartRound();
         }
 
+        // ---------- удержание E (античит) ----------
+
+        /// <summary>
+        /// Удержания E считает владелец, но сервер засекает их сам: клиент сообщает начало, и подъём союзника
+        /// или открытие ящика принимается, только если с начала прошло почти всё время удержания
+        /// (подменённый в памяти прогресс ничего не даёт). Боты — серверные, им верим.
+        /// </summary>
+        HoldKind _holdKind;
+        ulong _holdTarget;
+        double _holdStart;
+
+        /// <summary>Доля времени удержания, которую сервер требует (остальное — запас на разброс задержки сети).</summary>
+        const float HoldTolerance = 0.8f;
+
+        /// <summary>Владелец: начал удерживать E (target — NetworkObjectId союзника или номер ящика).</summary>
+        public void BeginHold(HoldKind kind, ulong target)
+        {
+            if (!IsBot)
+                BeginHoldRpc(kind, target);
+        }
+
+        [Rpc(SendTo.Server)]
+        void BeginHoldRpc(HoldKind kind, ulong target)
+        {
+            _holdKind = kind;
+            _holdTarget = target;
+            _holdStart = NetClock.Now;
+        }
+
+        /// <summary>Сервер: удержание этого действия длилось достаточно; отметка начала сгорает.</summary>
+        bool ServerHeldLongEnough(HoldKind kind, ulong target, float duration)
+        {
+            if (IsBot)
+                return true;
+            bool ok = _holdKind == kind && _holdTarget == target && NetClock.Now - _holdStart >= duration * HoldTolerance;
+            _holdKind = HoldKind.None;
+            if (!ok)
+                Debug.LogWarning($"[AntiCheat] {_health.DisplayName}: {kind} without a full hold, rejected");
+            return ok;
+        }
+
         // ---------- запросы владельца ----------
 
         public void ReportFall() => FellRpc();
@@ -361,7 +425,7 @@ namespace RocketWars.Player
         void OpenCrateRpc(int index)
         {
             var crate = CrateInReach(index);
-            if (crate == null || !crate.ServerOpen())
+            if (crate == null || !ServerHeldLongEnough(HoldKind.Crate, (ulong)index, LootCrate.OpenTime) || !crate.ServerOpen())
                 return;
             Debug.Log($"[RocketWars] {_health.DisplayName} opened crate {index}: {crate.Kind}");
 
@@ -545,7 +609,9 @@ namespace RocketWars.Player
                 return;
             if (_health.IsDowned || !target.IsDowned || target.Team != _health.Team || target == _health)
                 return;
-            if (Vector3.Distance(transform.position, target.transform.position) > ReviveInteraction.Range + ReviveRangeSlack)
+            if (ReviveInteraction.DistanceToBody(transform.position, target) > ReviveInteraction.Range + ReviveRangeSlack)
+                return;
+            if (!ServerHeldLongEnough(HoldKind.Revive, target.NetworkObjectId, ReviveInteraction.ReviveDuration))
                 return;
 
             target.Revive();
@@ -565,6 +631,14 @@ namespace RocketWars.Player
 
         [Rpc(SendTo.Server)]
         void DebugExplosionRpc(Vector3 position) => Explosion.Detonate(position, gameObject, _health.Team);
+
+        /// <summary>Сервер: переставить игрока так, чтобы MovementGuard не принял это за читерский телепорт.</summary>
+        public void ServerTeleport(Vector3 position, Quaternion rotation)
+        {
+            if (TryGetComponent(out MovementGuard guard))
+                guard.Grace(2f);
+            TeleportRpc(position, rotation);
+        }
 
         /// <summary>Сервер → владелец: переставить игрока (движение у владельца).</summary>
         [Rpc(SendTo.Owner)]

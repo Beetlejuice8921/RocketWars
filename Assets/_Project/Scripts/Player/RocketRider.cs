@@ -6,34 +6,40 @@ using UnityEngine.InputSystem;
 
 namespace RocketWars.Player
 {
+    /// <summary>Трюк на ракете: брейк (вращение на голове), руки-крылья, дэб.</summary>
+    public enum RideTrick : byte { None, Breakdance, Wings, Dab }
+
     /// <summary>
-    /// «Полёт на ракете» для локального игрока: зажал E рядом с ракетой — повис на ней (до 4 человек на ракету),
-    /// отпустил — отцепился и летит дальше по инерции (а там раскроется парашют).
-    /// Схватиться можно за заряженную ракету во время сирены (тогда улетаешь вместе с ней при пуске)
-    /// или за пролетающую ракету в пределах 3 м. Позицию висящего ведёт владелец — NetworkTransform показывает её всем.
+    /// «Полёт на ракете» для локального игрока: зажал E рядом с ракетой — сел на неё верхом (до 4 человек друг за другом),
+    /// отпустил — спрыгнул и летит дальше по инерции (а там раскроется парашют).
+    /// Сесть можно на заряженную ракету во время сирены (она стоит носом вверх — сидят «как космонавты», лицом в небо;
+    /// после пуска ракета ложится на курс, и сидящие оказываются сверху) или на пролетающую ракету в пределах 3 м.
+    /// В полёте зажатый Q — трюк (вид от третьего лица, случайная анимация — её рисует PlayerVisual).
+    /// Позицию сидящего ведёт владелец — NetworkTransform показывает её всем, а тело рисуется по локальной копии ракеты.
     /// </summary>
+    [DefaultExecutionOrder(-50)] // раньше PlayerVisual: тело ставится на ракету уже после того, как сдвинулся корень игрока
     [RequireComponent(typeof(FpsController), typeof(NetworkPlayer), typeof(PlayerHealth))]
     public class RocketRider : MonoBehaviour
     {
         public const int MaxRiders = 4;
         const float GrabRange = 3f;
-        /// <summary>От ног до вытянутых вверх кистей.</summary>
+        /// <summary>От ног до вытянутых вверх кистей (тянемся к ракете).</summary>
         const float HangBelow = 2.05f;
 
-        // в полёте: держатся за брюхо ракеты — по двое ближе к носу и к хвосту (система координат ракеты, +Z — нос)
-        static readonly float Belly = -(Core.Models.RocketRadius + 0.05f);
-        static readonly Vector3[] Slots =
-        {
-            new Vector3(0.5f, Belly, 1.2f), new Vector3(-0.5f, Belly, 1.2f),
-            new Vector3(0.5f, Belly, -0.9f), new Vector3(-0.5f, Belly, -0.9f),
-        };
-
-        // во время сирены: стоят на крыше шахты вокруг ракеты и держатся за неё
-        const float SiloGripHeight = 4.6f;
-        // дальше радиуса капсулы игрока от корпуса: стоящая ракета теперь твёрдая
-        static readonly float SiloGripRadius = Core.Models.RocketRadius + 0.45f;
+        // верхом, друг за другом вдоль спины ракеты (система координат ракеты: +Z — нос, +Y — спина, в полёте она сверху);
+        // заднее место — ещё над крышей шахты, пока ракета стоит
+        static readonly float[] SeatZ = { 1.35f, 0.65f, -0.05f, -0.75f };
+        static readonly float SeatLift = Core.Models.RocketRadius + 0.02f;
+        /// <summary>От подошв (pivot тела) до низа бёдер сидящего: тело опускаем так, чтобы бёдра легли на корпус.</summary>
+        public const float HipLift = 0.72f;
+        /// <summary>Глаза сидящего относительно сиденья (в осях тела).</summary>
+        static readonly Vector3 SeatEye = new Vector3(0f, 1.75f - HipLift, 0.1f);
+        /// <summary>Капсула игрока — над сиденьем, вне стоящей (твёрдой) ракеты: спрыгнул — и не застрял в корпусе.</summary>
+        const float RootOut = 0.45f;
 
         public bool IsRiding => _siloIndex >= 0;
+        /// <summary>Ракета уже летит (можно делать трюки).</summary>
+        public bool InFlight => IsRiding && _rocket != null;
         /// <summary>Есть за что схватиться прямо сейчас (для подсказки и приоритета над подъёмом союзника).</summary>
         public bool HasGrabTarget { get; private set; }
         public bool TargetFull { get; private set; }
@@ -92,7 +98,18 @@ namespace RocketWars.Player
             var silo = MatchNet.Instance != null ? MatchNet.Instance.GetSilo(_siloIndex) : null;
             bool siloStillLaunching = silo != null && silo.State == SiloState.Launching;
             if (!held || _health.IsDowned || (_rocket == null && !siloStillLaunching))
+            {
                 Release();
+                return;
+            }
+
+            // трюк — только в полёте и пока зажат Q; какой именно — случайно в момент нажатия
+            var kb = Keyboard.current;
+            bool trick = _rocket != null && kb != null && kb.qKey.isPressed && !UiRoot.CursorFree;
+            if (trick && _net.RideTrick == RideTrick.None)
+                _net.SetTrick((RideTrick)Random.Range(1, 4));
+            else if (!trick && _net.RideTrick != RideTrick.None)
+                _net.SetTrick(RideTrick.None);
         }
 
         void LateUpdate()
@@ -103,35 +120,72 @@ namespace RocketWars.Player
             if (_rocket == null)
                 _rocket = FindRocketFromSilo(_siloIndex);
             _lastVelocity = _rocket != null ? _rocket.CurrentVelocity : Vector3.zero;
-            if (TryGetHangPosition(_siloIndex, _slot, out var pos))
-                _fps.SetAttachedPosition(pos);
+            if (TryGetSeat(_siloIndex, _slot, out var seat, out var rotation))
+            {
+                _fps.SetAttachedPosition(seat + rotation * Vector3.up * RootOut);
+                // глаза — в голове сидящего (пока ракета стоит, смотрим из «космонавта», лежащего на спине)
+                _fps.CameraRoot.position = seat + rotation * SeatEye;
+            }
         }
 
         /// <summary>
-        /// Где должен быть (ногами) игрок, висящий в слоте slot на ракете шахты silo: по летящей ракете,
-        /// а до пуска — по ракете, стоящей в шахте. Используется и для своих, и для чужих (по локальной копии ракеты).
+        /// Место в слоте slot на ракете шахты silo: точка на спине ракеты под бёдрами и поворот тела
+        /// (лицом к носу, макушкой от корпуса). По летящей ракете, а до пуска — по стоящей в шахте.
+        /// Используется и для своих, и для чужих (по локальной копии ракеты).
         /// </summary>
-        public static bool TryGetHangPosition(int silo, int slot, out Vector3 feet)
+        public static bool TryGetSeat(int silo, int slot, out Vector3 seat, out Quaternion rotation)
         {
-            feet = default;
-            slot = Mathf.Clamp(slot, 0, Slots.Length - 1);
+            seat = default;
+            rotation = Quaternion.identity;
+            slot = Mathf.Clamp(slot, 0, SeatZ.Length - 1);
+            var s = MatchNet.Instance != null ? MatchNet.Instance.GetSilo(silo) : null;
             var rocket = FindRocketFromSilo(silo);
-            Vector3 attach;
+            Vector3 center, axis, back;
             if (rocket != null)
             {
-                attach = rocket.transform.position + rocket.transform.rotation * Slots[slot];
+                center = rocket.transform.position;
+                axis = rocket.transform.forward;
+                back = rocket.transform.up;
+                // на разгоне ракета доворачивает крен к цели — сидящие плавно переезжают со спины стоявшей ракеты
+                float blend = rocket.LaunchBlend;
+                if (s != null && blend < 1f)
+                {
+                    Vector3 b = Vector3.ProjectOnPlane(Vector3.Slerp(SiloBack(s), back, blend), axis);
+                    if (b.sqrMagnitude > 1e-4f)
+                        back = b.normalized;
+                }
             }
             else
             {
-                var s = MatchNet.Instance != null ? MatchNet.Instance.GetSilo(silo) : null;
                 if (s == null)
                     return false;
-                // ракета в шахте стоит носом вверх: четверо по кругу на крыше башни
-                Vector3 dir = Quaternion.Euler(0f, 45f + slot * 90f, 0f) * Vector3.forward;
-                attach = s.transform.position + Vector3.up * SiloGripHeight + dir * SiloGripRadius;
+                center = s.LoadedRocketCenter;
+                axis = Vector3.up;
+                back = SiloBack(s);
             }
-            feet = attach - Vector3.up * HangBelow;
+            rotation = Quaternion.LookRotation(axis, back);
+            seat = center + axis * SeatZ[slot] + back * SeatLift;
             return true;
+        }
+
+        /// <summary>
+        /// Спина стоящей ракеты — сторона от вражеских шахт, по ближайшей оси (как крен ракеты на старте):
+        /// при пуске по врагу сидящие уже на своих местах и после поворота на курс окажутся сверху.
+        /// </summary>
+        static Vector3 SiloBack(RocketSilo silo)
+        {
+            Vector3 enemy = Vector3.zero;
+            int count = 0;
+            foreach (var o in RocketSilo.All)
+                if (o != null && o.Team != silo.Team)
+                {
+                    enemy += o.transform.position;
+                    count++;
+                }
+            Vector3 away = count > 0 ? silo.transform.position - enemy / count : Vector3.back;
+            return Mathf.Abs(away.x) > Mathf.Abs(away.z)
+                ? new Vector3(Mathf.Sign(away.x), 0f, 0f)
+                : new Vector3(0f, 0f, away.z < 0f ? -1f : 1f);
         }
 
         void FindTarget(out int silo, out Rocket rocket)
@@ -200,6 +254,7 @@ namespace RocketWars.Player
             _siloIndex = -1;
             _rocket = null;
             _net.SetRide(-1, 0);
+            _net.SetTrick(RideTrick.None);
         }
 
         /// <summary>Первый свободный слот на ракете этой шахты (по сетевым флагам других игроков) или −1.</summary>

@@ -4,12 +4,13 @@ using UnityEngine;
 
 namespace RocketWars.Terrain
 {
-    /// <summary>Вид кубика (для обломков): трава сверху, земля, каменный нижний слой.</summary>
+    /// <summary>Вид кубика (для обломков): верх (трава/песок/снег), земля, каменный нижний слой; Wood — щепки ящика.</summary>
     public enum BlockKind : byte
     {
         Grass,
         Dirt,
-        Stone
+        Stone,
+        Wood
     }
 
     /// <summary>
@@ -35,6 +36,7 @@ namespace RocketWars.Terrain
 
         public int Team { get; private set; }
         public int Seed { get; private set; }
+        public Biome Biome { get; private set; }
 
         /// <summary>Вызывается после разрушения кубиков (мировые позиции центров уничтоженных блоков не передаём — хватит факта).</summary>
         public event Action BlocksChanged;
@@ -70,10 +72,11 @@ namespace RocketWars.Terrain
         void OnEnable() => All.Add(this);
         void OnDisable() => All.Remove(this);
 
-        public void Build(int team, int seed)
+        public void Build(int team, int seed, Biome biome)
         {
             Team = team;
             Seed = seed;
+            Biome = biome;
 
             var heights = IslandGenerator.Generate(seed, Width, Depth, SurfaceMaxHeight);
             _hp = new byte[Width * Depth * MaxHeight];
@@ -97,7 +100,7 @@ namespace RocketWars.Terrain
             int cxCount = Mathf.CeilToInt(Width / (float)ChunkSize);
             int czCount = Mathf.CeilToInt(Depth / (float)ChunkSize);
             _chunks = new VoxelChunk[cxCount, czCount];
-            var material = VoxelAtlas.GetMaterial();
+            var material = VoxelAtlas.GetMaterial(biome);
             for (int cx = 0; cx < cxCount; cx++)
             for (int cz = 0; cz < czCount; cz++)
             {

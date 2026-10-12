@@ -12,7 +12,10 @@ namespace RocketWars.Player
     public class ReviveInteraction : MonoBehaviour
     {
         public const float ReviveDuration = 3f;
-        public const float Range = 2.5f;
+        /// <summary>Дальность подъёма — до ближайшей точки лежащего тела (а не до ног), поэтому подойти можно с любой стороны.</summary>
+        public const float Range = 3f;
+        /// <summary>Лежащее тело вытянуто вдоль forward на ±BodyHalfLength от центра (см. PlayerVisual.UpdatePose).</summary>
+        const float BodyHalfLength = 1f;
 
         public PlayerHealth Target { get; private set; }
         public float Progress { get; private set; }
@@ -24,6 +27,7 @@ namespace RocketWars.Player
         NetworkPlayer _net;
         bool _needRelease;
         RocketRider _rider;
+        PlayerHealth _holdTarget;
 
         void Awake()
         {
@@ -63,6 +67,13 @@ namespace RocketWars.Player
                 return;
             }
 
+            // начало удержания (или смена цели) — серверу: он сам засекает, прошло ли 3 с
+            if (Progress <= 0f || Target != _holdTarget)
+            {
+                Progress = 0f;
+                _holdTarget = Target;
+                _net.BeginHold(HoldKind.Revive, Target.NetworkObjectId);
+            }
             Progress += Time.deltaTime;
             if (Progress >= ReviveDuration)
             {
@@ -70,6 +81,17 @@ namespace RocketWars.Player
                 Progress = 0f;
                 _needRelease = true;
             }
+        }
+
+        /// <summary>Расстояние от точки до лежащего тела: до отрезка «ноги — голова», а не до одной точки в центре.</summary>
+        public static float DistanceToBody(Vector3 from, PlayerHealth target)
+        {
+            var t = target.transform;
+            Vector3 axis = t.forward * BodyHalfLength;
+            Vector3 a = t.position - axis, b = t.position + axis;
+            Vector3 ab = b - a;
+            float k = Mathf.Clamp01(Vector3.Dot(from - a, ab) / ab.sqrMagnitude);
+            return Vector3.Distance(from, a + ab * k);
         }
 
         PlayerHealth FindTarget()
@@ -80,7 +102,7 @@ namespace RocketWars.Player
             {
                 if (p == _health || !p.IsDowned || p.Team != _health.Team)
                     continue;
-                float d = Vector3.Distance(transform.position, p.transform.position);
+                float d = DistanceToBody(transform.position, p);
                 if (d <= bestDist)
                 {
                     best = p;
@@ -90,7 +112,7 @@ namespace RocketWars.Player
 
             // держим ту же цель, если она ещё в радиусе, чтобы прогресс не сбрасывался
             if (Target != null && Target != best && Target.IsDowned &&
-                Vector3.Distance(transform.position, Target.transform.position) <= Range)
+                DistanceToBody(transform.position, Target) <= Range)
                 return Target;
             if (best != Target)
                 Progress = 0f;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using RocketWars.Core;
 using RocketWars.Fx;
 using RocketWars.Player;
@@ -102,30 +103,30 @@ namespace RocketWars.Combat
             _muzzleFrame = Time.frameCount;
         }
 
+        /// <summary>Отлетавшие пули ждут повторного выстрела выключенными (очередь берсерка — ~30 пуль в секунду).</summary>
+        static readonly Stack<Bullet> Pool = new Stack<Bullet>();
+        static readonly RaycastHit[] Hits = new RaycastHit[32];
+
         public static Bullet Spawn(Vector3 origin, Vector3 direction, GameObject shooter, int team, bool authoritative, float catchUpSeconds = 0f,
             BulletKind kind = BulletKind.Normal)
         {
-            var go = new GameObject(authoritative ? "Bullet (server)" : "Bullet");
-            go.transform.position = origin;
-            go.transform.rotation = Quaternion.LookRotation(direction);
+            var b = Take();
+            var go = b.gameObject;
+            go.transform.SetPositionAndRotation(origin, Quaternion.LookRotation(direction));
+            go.SetActive(true);
 
-            var b = go.AddComponent<Bullet>();
-            b._visual = new GameObject("Tracer").transform;
-            b._visual.SetParent(go.transform, false);
-            b._core = TracerPart(b._visual, CoreColor, 4f);
-            b._tail = TracerPart(b._visual, TailColor, 1.3f); // ярче — «перегорает» в жёлтый, а хвост должен быть оранжевым
+            b._traveled = 0f;
+            b._visualOffset = Vector3.zero;
             if (shooter != null && shooter == _muzzleShooter && _muzzleFrame == Time.frameCount)
             {
                 // своя пуля: путь (и попадание) — из глаз по прицелу, а трассер — из дула, сходится к прицелу
                 b._visualOffset = _muzzlePos - origin;
                 _muzzleShooter = null;
             }
-            if (kind == BulletKind.Sniper)
-            {
-                b._speed = SniperSpec.Speed;
-                b._damage = SniperSpec.Damage;
-                b._maxRange = SniperSpec.MaxRange;
-            }
+            bool sniper = kind == BulletKind.Sniper;
+            b._speed = sniper ? SniperSpec.Speed : PistolSpec.Speed;
+            b._damage = sniper ? SniperSpec.Damage : PistolSpec.Damage;
+            b._maxRange = sniper ? SniperSpec.MaxRange : PistolSpec.MaxRange;
             b.ScaleTracer();
             b._dir = direction.normalized;
             b._authoritative = authoritative;
@@ -137,12 +138,43 @@ namespace RocketWars.Combat
             return b;
         }
 
+        static Bullet Take()
+        {
+            while (Pool.Count > 0)
+            {
+                var pooled = Pool.Pop();
+                if (pooled != null) // после смены сцены в стеке остаются уничтоженные
+                    return pooled;
+            }
+
+            var go = new GameObject("Bullet");
+            var b = go.AddComponent<Bullet>();
+            b._visual = new GameObject("Tracer").transform;
+            b._visual.SetParent(go.transform, false);
+            b._core = TracerPart(b._visual, CoreColor, 4f);
+            b._tail = TracerPart(b._visual, TailColor, 1.3f); // ярче — «перегорает» в жёлтый, а хвост должен быть оранжевым
+            return b;
+        }
+
+        void Release()
+        {
+            _shooter = null;
+            _shooterCollider = null;
+            gameObject.SetActive(false);
+            Pool.Push(this);
+        }
+
+        static Mesh _cubeMesh;
+
         static Transform TracerPart(Transform parent, Color color, float glow)
         {
-            var part = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(part.GetComponent<Collider>());
+            // без CreatePrimitive: он добавляет BoxCollider, который пришлось бы тут же удалять
+            if (_cubeMesh == null)
+                _cubeMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
+            var part = new GameObject("TracerPart");
+            part.AddComponent<MeshFilter>().sharedMesh = _cubeMesh;
             part.transform.SetParent(parent, false);
-            var renderer = part.GetComponent<MeshRenderer>();
+            var renderer = part.AddComponent<MeshRenderer>();
             renderer.sharedMaterial = RuntimeMaterials.Emissive(color, glow);
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
@@ -175,7 +207,7 @@ namespace RocketWars.Combat
         void Update()
         {
             Step(_speed * Time.deltaTime);
-            if (this != null && _core != null)
+            if (gameObject.activeSelf)
                 ScaleTracer();
         }
 
@@ -186,10 +218,11 @@ namespace RocketWars.Combat
 
             Vector3 pos = transform.position;
             // луч на длину шага; свой коллайдер стрелка пропускаем
-            var hits = Physics.RaycastAll(pos, _dir, distance, ~0, QueryTriggerInteraction.Ignore);
+            int count = Physics.RaycastNonAlloc(pos, _dir, Hits, distance, ~0, QueryTriggerInteraction.Ignore);
             RaycastHit? nearest = null;
-            foreach (var h in hits)
+            for (int i = 0; i < count; i++)
             {
+                var h = Hits[i];
                 if (h.collider == _shooterCollider)
                     continue;
                 if (nearest == null || h.distance < nearest.Value.distance)
@@ -205,7 +238,7 @@ namespace RocketWars.Combat
             transform.position = pos + _dir * distance;
             _traveled += distance;
             if (_traveled > _maxRange)
-                Destroy(gameObject);
+                Release();
         }
 
         void OnHit(RaycastHit hit)
@@ -236,7 +269,7 @@ namespace RocketWars.Combat
                         0.12f, 0.08f, VoxelParticles.RandomSmoke(), gravity: 6f, growEnd: 0.1f, shrinkStart: 0.4f);
                 Sfx.PlayAt(Sfx.BulletImpact, hit.point, 0.5f, 30f, Random.Range(0.9f, 1.15f));
             }
-            Destroy(gameObject);
+            Release();
         }
     }
 }

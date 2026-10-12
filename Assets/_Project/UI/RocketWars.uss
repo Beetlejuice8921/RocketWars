@@ -161,34 +161,153 @@
     width: 760px;
 }
 
+.lang-current {
+    flex-grow: 1;
+    margin-left: 12px;
+}
+
+.lang-panel {
+    width: 820px;
+    background-color: rgb(28, 32, 40);
+    align-items: center;
+}
+
+.lang-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.lang-option {
+    width: 240px;
+}
+
 /* ---------- HUD ---------- */
 
 .hud {
     padding: 0;
 }
 
-.score {
+/* верхняя панель матча: игроки красных | счёт и раунд | игроки зелёных */
+.teambar {
     position: absolute;
-    top: 14px;
+    top: 8px;
     left: 0;
     right: 0;
     flex-direction: row;
     justify-content: center;
+    align-items: flex-start;
+}
+
+.teambar-side {
+    flex-direction: row;
+    width: 40%;
+}
+
+/* у левой команды карточки прижаты к центру */
+.teambar-left {
+    justify-content: flex-end;
+}
+
+.teambar-right {
+    justify-content: flex-start;
+}
+
+.teambar-center {
     align-items: center;
+    margin: 0 6px;
 }
 
-.score-num {
-    font-size: 40px;
-    -unity-font-style: bold;
-    width: 110px;
-    -unity-text-align: middle-center;
+.teambar-scores {
+    flex-direction: row;
 }
 
-.score-round {
-    font-size: 32px;
-    -unity-font-style: bold;
-    width: 360px;
+.teambar-score {
+    font-size: 26px;
+    width: 64px;
+    height: 48px;
     -unity-text-align: middle-center;
+    color: rgb(255, 255, 255);
+    border-width: 3px;
+    border-color: rgba(0, 0, 0, 0.6);
+}
+
+.teambar-score0 {
+    background-color: rgba(190, 30, 28, 0.85);
+}
+
+.teambar-score1 {
+    background-color: rgba(28, 160, 64, 0.85);
+    margin-left: -3px;
+}
+
+.teambar-round {
+    font-size: 9px;
+    margin-top: 4px;
+    padding: 3px 6px;
+    color: rgb(255, 255, 255);
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.teambar-card {
+    width: 66px;
+    align-items: center;
+    margin: 0 2px;
+}
+
+.teambar-head {
+    width: 48px;
+    height: 48px;
+    background-color: rgba(0, 0, 0, 0.45);
+    border-width: 3px;
+    border-color: rgba(0, 0, 0, 0.6);
+}
+
+.teambar-head-img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* число фрагов поверх головы */
+.teambar-frags {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    font-size: 18px;
+    -unity-text-align: middle-center;
+    color: rgb(255, 255, 255);
+    text-shadow: 2px 2px 0 rgb(0, 0, 0);
+}
+
+.teambar-name {
+    font-size: 7px;
+    margin-top: 3px;
+    -unity-text-align: upper-center;
+    white-space: nowrap;
+}
+
+/* лежащий: голова уже чёрно-белая, рамка и ник серые */
+.teambar-downed .teambar-head {
+    border-color: rgba(60, 60, 60, 0.8);
+    background-color: rgba(0, 0, 0, 0.6);
+}
+
+.teambar-downed .teambar-frags {
+    color: rgb(170, 170, 170);
+}
+
+.teambar-downed .teambar-name {
+    color: rgb(150, 150, 150);
+}
+
+.teambar-me .teambar-head {
+    border-color: rgb(255, 220, 80);
 }
 
 .team0 {
@@ -732,6 +851,161 @@
 .results-panel {
     width: 1840px;
     max-height: 90%;
+}
+
+/* в конце матча таблица прижата к верху, под ней — пьедестал */
+.results-final {
+    justify-content: flex-start;
+    padding-top: 10px;
+    background-color: rgba(10, 14, 20, 0.6);
+}
+
+.results-final .results-panel {
+    max-height: 58%;
+}
+
+.podium {
+    width: 1840px;
+    flex-grow: 1;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    margin: 8px 0 10px 0;
+    padding: 6px 0;
+    background-color: rgba(28, 32, 40, 0.88);
+    border-width: 4px;
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.podium-slot {
+    width: 440px;
+    align-items: center;
+    margin: 0 16px;
+}
+
+.podium-slot-1 {
+    width: 600px;
+}
+
+.podium-slot-2 {
+    margin-top: 40px;
+}
+
+.podium-slot-3 {
+    margin-top: 64px;
+}
+
+/* место под модельку в раскладке; сама моделька (текстура 48x64) крупнее и свисает за пьедестал */
+.podium-figure-space {
+    height: 150px;
+}
+
+.podium-figure-space-1 {
+    height: 200px;
+}
+
+.podium-figure {
+    position: absolute;
+    left: 50%;
+    width: 240px;
+    height: 320px;
+    margin-left: -120px;
+}
+
+.podium-figure-1 {
+    width: 336px;
+    height: 448px;
+    margin-left: -168px;
+}
+
+.podium-place {
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.podium-color-1 {
+    color: rgb(255, 210, 60);
+}
+
+.podium-color-2 {
+    color: rgb(205, 215, 228);
+}
+
+.podium-color-3 {
+    color: rgb(222, 140, 80);
+}
+
+.podium-name {
+    font-size: 18px;
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-bottom: 6px;
+}
+
+.podium-slot-1 .podium-name {
+    font-size: 26px;
+}
+
+.podium-stats {
+    font-size: 10px;
+    color: rgb(190, 200, 214);
+    margin-bottom: 2px;
+}
+
+.podium-block {
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border-width: 4px;
+    border-radius: 0;
+}
+
+.podium-block-1 {
+    height: 64px;
+    background-color: rgb(232, 180, 40);
+    border-color: rgb(150, 110, 20);
+}
+
+.podium-block-2 {
+    height: 44px;
+    background-color: rgb(170, 180, 194);
+    border-color: rgb(100, 108, 120);
+}
+
+.podium-block-3 {
+    height: 32px;
+    background-color: rgb(196, 112, 56);
+    border-color: rgb(120, 64, 28);
+}
+
+.podium-number {
+    position: absolute;
+    font-size: 26px;
+    -unity-text-align: middle-center;
+}
+
+.podium-block-3 .podium-number {
+    font-size: 20px;
+}
+
+.podium-achievements {
+    margin-top: 6px;
+    align-items: flex-start;
+}
+
+.podium-achievement {
+    flex-direction: row;
+    align-items: center;
+    margin: 1px 0;
+}
+
+.podium-achievement .badge {
+    border-radius: 0;
+    margin-right: 10px;
+}
+
+.podium-achievement-title {
+    font-size: 14px;
 }
 
 .results-columns {

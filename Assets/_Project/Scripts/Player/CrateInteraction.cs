@@ -25,6 +25,7 @@ namespace RocketWars.Player
         RocketRider _rider;
         ReviveInteraction _revive;
         bool _needRelease;
+        LootCrate _holdTarget;
 
         void Awake()
         {
@@ -89,6 +90,13 @@ namespace RocketWars.Player
                 }
                 else
                 {
+                    // начало удержания (или другой ящик) — серверу: он сам засекает, прошло ли 1,5 с
+                    if (Progress <= 0f || Target != _holdTarget)
+                    {
+                        Progress = 0f;
+                        _holdTarget = Target;
+                        _net.BeginHold(HoldKind.Crate, (ulong)Target.NetIndex);
+                    }
                     Progress += Time.deltaTime;
                     if (Progress >= LootCrate.OpenTime)
                     {

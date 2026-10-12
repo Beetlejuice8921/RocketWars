@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using RocketWars.Core;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -108,14 +109,14 @@ namespace RocketWars.Net
                     lan.StartBroadcast(p);
                 return true;
             }
-            return Fail($"Не удалось создать комнату: порты {port}–{port + HostPortAttempts - 1} заняты");
+            return Fail(Loc.F("Не удалось создать комнату: порты {0}–{1} заняты", port, port + HostPortAttempts - 1));
         }
 
         public bool JoinLan(string address, ushort hostPort)
         {
             SetPayload();
             _transport.SetConnectionData(address, hostPort);
-            return Manager.StartClient() || Fail("Не удалось начать подключение");
+            return Manager.StartClient() || Fail(Loc.T("Не удалось начать подключение"));
         }
 
         // ---------- Internet (Unity Sessions) ----------
@@ -179,16 +180,16 @@ namespace RocketWars.Net
             }
 
             // мы — клиент, и отключили нас (или хост ушёл)
-            // своя причина (отказ при одобрении) — по-русски; служебный текст NGO не показываем
+            // своя причина (отказ при одобрении) приходит русским ключом Loc и переводится здесь; служебный текст NGO не показываем
             string reason = Manager.DisconnectReason;
             bool ours = !string.IsNullOrEmpty(reason) && !reason.StartsWith("[");
-            ReturnToMenu(ours ? reason : "Хост закрыл комнату или соединение потеряно");
+            ReturnToMenu(ours ? Loc.T(reason) : Loc.T("Хост закрыл комнату или соединение потеряно"));
         }
 
         void OnTransportFailure()
         {
             if (!_probingPorts)
-                ReturnToMenu("Сетевая ошибка");
+                ReturnToMenu(Loc.T("Сетевая ошибка"));
         }
 
         /// <summary>Выйти из комнаты и вернуться в меню (полная перезагрузка сцены).</summary>

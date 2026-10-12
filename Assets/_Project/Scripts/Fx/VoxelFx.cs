@@ -57,16 +57,27 @@ namespace RocketWars.Fx
                 Vector3 dir = b - center;
                 dir.y = Mathf.Abs(dir.y) + 0.6f;
                 dir.Normalize();
-                bool alt = Random.value < 0.5f;
-                byte color = kinds[i] switch
-                {
-                    BlockKind.Grass => alt ? VoxelParticles.Grass : VoxelParticles.GrassDark,
-                    BlockKind.Stone => alt ? VoxelParticles.Stone : VoxelParticles.StoneDark,
-                    _ => alt ? VoxelParticles.Dirt : VoxelParticles.DirtDark,
-                };
+                byte color = DebrisColor(kinds[i], Biomes.Current, Random.value < 0.5f);
                 P.Emit(b, dir * Random.Range(7f, 15f) + Vector3.up * Random.Range(4f, 9f), Random.Range(2.5f, 4f),
                     Random.Range(0.35f, 0.55f), Random.Range(0.35f, 0.55f), color, gravity: 22f, growEnd: 0.01f, shrinkStart: 0.75f, collide: true);
             }
+        }
+
+        /// <summary>Цвет обломка в тон земле раунда; alt — светлый или тёмный вариант.</summary>
+        static byte DebrisColor(BlockKind kind, Biome biome, bool alt)
+        {
+            if (kind == BlockKind.Wood)
+                return alt ? VoxelParticles.Dirt : VoxelParticles.DirtDark;
+            return (biome, kind) switch
+            {
+                (Biome.Desert, BlockKind.Stone) => alt ? VoxelParticles.Sandstone : VoxelParticles.SandstoneDark,
+                (Biome.Desert, _) => alt ? VoxelParticles.Sand : VoxelParticles.SandDark,
+                (Biome.Snow, BlockKind.Grass) => alt ? VoxelParticles.Snow : VoxelParticles.SnowDark,
+                (Biome.Snow, BlockKind.Stone) => alt ? VoxelParticles.ColdStone : VoxelParticles.ColdStoneDark,
+                (_, BlockKind.Grass) => alt ? VoxelParticles.Grass : VoxelParticles.GrassDark,
+                (_, BlockKind.Stone) => alt ? VoxelParticles.Stone : VoxelParticles.StoneDark,
+                _ => alt ? VoxelParticles.Dirt : VoxelParticles.DirtDark,
+            };
         }
 
         /// <summary>Клуб дыма за ракетой.</summary>

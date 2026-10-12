@@ -193,7 +193,8 @@ namespace RocketWars.Player
             }
             bool scoped = _binoculars != null && _binoculars.Amount > 0.3f;
             // на время превращения камера сзади (вид от третьего лица) — оружие «в камере» не показываем и не стреляем
-            bool canUse = !_health.IsDowned && !UiRoot.CursorFree && !_net.InBerserkTransform;
+            bool canUse = !_health.IsDowned && !UiRoot.CursorFree && !_net.InBerserkTransform
+                && _net.RideTrick == RideTrick.None; // во время трюка — вид от третьего лица, руки заняты
             bool gold = HoldingGoldGuns;
             _model.gameObject.SetActive(canUse && !scoped && !gold);
             _dual.gameObject.SetActive(canUse && !scoped && gold);

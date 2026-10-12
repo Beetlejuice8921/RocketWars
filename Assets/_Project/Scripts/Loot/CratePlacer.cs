@@ -15,17 +15,42 @@ namespace RocketWars.Loot
         /// <summary>От центра шахты: площадка 3×3 и пульт в 2,4 м сбоку.</summary>
         const float SiloClearance = 5.5f;
 
+        /// <summary>Точка для ящика: клетка острова, содержимое и поворот (шаг 90°).</summary>
+        public struct Spot
+        {
+            public int X, Z;
+            public LootKind Kind;
+            public int YawStep;
+        }
+
         public static List<LootCrate> Place(VoxelIsland island, int seed, IReadOnlyList<RocketSilo> silos, Transform parent,
             float minDistance = 14f)
         {
-            var rng = new System.Random(seed);
             var crates = new List<LootCrate>();
+            foreach (var spot in Pick(island, new System.Random(seed), silos, CratesPerIsland, minDistance, null))
+            {
+                crates.Add(LootCrate.Create(island, spot.X, spot.Z, spot.Kind, spot.YawStep * 90f, parent));
+                island.ClearGrass(spot.X, spot.Z, spot.X, spot.Z); // и сквозь дно ящика
+            }
+            return crates;
+        }
+
+        /// <summary>
+        /// Подобрать count мест: на целой земле, не у шахт и флага, не ближе minDistance друг к другу
+        /// и к уже стоящим ящикам (avoid — клетки острова). Не нашлось места — расстояние постепенно уменьшается.
+        /// </summary>
+        public static List<Spot> Pick(VoxelIsland island, System.Random rng, IReadOnlyList<RocketSilo> silos, int count,
+            float minDistance, IReadOnlyList<Vector2> avoid)
+        {
+            var spots = new List<Spot>();
             var used = new List<Vector2>();
+            if (avoid != null)
+                used.AddRange(avoid);
             float dist = minDistance;
 
-            for (int pass = 0; pass < 4 && crates.Count < CratesPerIsland; pass++, dist *= 0.7f)
+            for (int pass = 0; pass < 4 && spots.Count < count; pass++, dist *= 0.7f)
             {
-                for (int attempt = 0; attempt < 2000 && crates.Count < CratesPerIsland; attempt++)
+                for (int attempt = 0; attempt < 2000 && spots.Count < count; attempt++)
                 {
                     int x = rng.Next(3, VoxelIsland.Width - 3);
                     int z = rng.Next(3, VoxelIsland.Depth - 3);
@@ -38,13 +63,12 @@ namespace RocketWars.Loot
 
                     used.Add(p);
                     var kind = (LootKind)rng.Next(6);
-                    float yaw = rng.Next(4) * 90f;
-                    crates.Add(LootCrate.Create(island, x, z, kind, yaw, parent));
-                    island.ClearGrass(x, z, x, z); // и сквозь дно ящика
+                    int yawStep = rng.Next(4);
+                    spots.Add(new Spot { X = x, Z = z, Kind = kind, YawStep = yawStep });
                 }
             }
 
-            return crates;
+            return spots;
         }
 
         /// <summary>Столбец и все соседи на месте (ящик не на краю и не над ямой).</summary>

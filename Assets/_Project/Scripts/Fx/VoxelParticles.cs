@@ -15,7 +15,8 @@ namespace RocketWars.Fx
 
         // палитра: индекс = материал
         public const byte Smoke0 = 0, Smoke1 = 1, Smoke2 = 2, Smoke3 = 3, Fire0 = 4, Fire1 = 5, Grass = 6, GrassDark = 7, Dirt = 8, DirtDark = 9,
-            HitRed = 10, HitRedDark = 11, Stone = 12, StoneDark = 13;
+            HitRed = 10, HitRedDark = 11, Stone = 12, StoneDark = 13, Sand = 14, SandDark = 15, Sandstone = 16, SandstoneDark = 17,
+            Snow = 18, SnowDark = 19, ColdStone = 20, ColdStoneDark = 21;
         public const byte NoColor = 255;
 
         /// <summary>Дым (Smoke0..Smoke3) — белый, полупрозрачный и без теней; остальное — непрозрачные кубики с тенью.</summary>
@@ -30,6 +31,8 @@ namespace RocketWars.Fx
             new Color32(118, 186, 72, 255), new Color32(92, 158, 56, 255), new Color32(121, 85, 58, 255), new Color32(95, 66, 45, 255),
             new Color(0.9f, 0.12f, 0.08f), new Color(0.55f, 0.05f, 0.05f), // попадание пули в игрока
             new Color(0.62f, 0.62f, 0.6f), new Color(0.45f, 0.45f, 0.44f),  // обломки камня
+            new Color32(226, 198, 134, 255), new Color32(196, 160, 100, 255), new Color32(196, 140, 88, 255), new Color32(160, 108, 68, 255), // пустыня
+            new Color32(240, 244, 250, 255), new Color32(208, 218, 234, 255), new Color32(132, 138, 148, 255), new Color32(96, 102, 112, 255), // снег
         };
 
         struct Particle
