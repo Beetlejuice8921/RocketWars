@@ -40,6 +40,14 @@ namespace RocketWars.Player
         /// <summary>В руках золотые пулемёты (обычное оружие и каска спрятаны).</summary>
         bool BerserkGear => _berserkGear;
 
+        /// <summary>Смена команды: грудь и фуражка берсерка — в цвете новой команды.</summary>
+        void SetBerserkTeam(int team)
+        {
+            SetModel(_bChest.transform, Models.BuffChest(team));
+            (_capMesh, _capMats) = Models.OfficerCap(team);
+            SetModel(_bCap.transform, (_capMesh, _capMats));
+        }
+
         void InitBerserk(int team)
         {
             var (chestMesh, chestMats) = Models.BuffChest(team);

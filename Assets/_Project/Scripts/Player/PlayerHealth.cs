@@ -65,6 +65,8 @@ namespace RocketWars.Player
         public event Action<float> Hurt;
         /// <summary>У всех: изменилось состояние.</summary>
         public event Action<PlayerState> StateChanged;
+        /// <summary>У всех: игрок перешёл в другую команду (лобби / после матча).</summary>
+        public event Action<int> TeamChanged;
         /// <summary>Сервер: игрок лёг (кто и чем его положил) — для статистики.</summary>
         public static event Action<PlayerHealth, DamageInfo> AnyDowned;
 
@@ -86,6 +88,7 @@ namespace RocketWars.Player
             _hp.OnValueChanged += OnHpChanged;
             _armor.OnValueChanged += OnHpChanged;
             _state.OnValueChanged += OnStateChanged;
+            _team.OnValueChanged += OnTeamChanged;
         }
 
         public override void OnNetworkDespawn()
@@ -93,7 +96,10 @@ namespace RocketWars.Player
             _hp.OnValueChanged -= OnHpChanged;
             _armor.OnValueChanged -= OnHpChanged;
             _state.OnValueChanged -= OnStateChanged;
+            _team.OnValueChanged -= OnTeamChanged;
         }
+
+        void OnTeamChanged(int oldValue, int newValue) => TeamChanged?.Invoke(newValue);
 
         void OnHpChanged(ObscuredFloat oldValue, ObscuredFloat newValue)
         {
@@ -108,6 +114,13 @@ namespace RocketWars.Player
         {
             _pendingTeam = team;
             _pendingName = displayName.Length > 28 ? displayName.Substring(0, 28) : displayName;
+        }
+
+        /// <summary>Сервер: перевести в другую команду (MatchNet.ServerSwitchTeam).</summary>
+        public void ServerSetTeam(int team)
+        {
+            if (IsServer)
+                _team.Value = team;
         }
 
         /// <summary>Команда, назначенная сервером, — доступна и до спавна.</summary>

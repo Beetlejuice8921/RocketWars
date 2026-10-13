@@ -179,6 +179,10 @@ namespace RocketWars.Core
                     RoundEnded?.Invoke(result);
                     break;
 
+                case MatchPhase.MatchEnd:
+                    _net.ServerApplyQueuedSwitches(); // запросы «перейти в команду», сделанные во время матча
+                    break;
+
                 case MatchPhase.RoundEnd when now >= s.PhaseEnd:
                     if (s.Score0 >= WinsNeeded || s.Score1 >= WinsNeeded)
                     {

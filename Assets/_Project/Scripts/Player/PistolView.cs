@@ -74,6 +74,7 @@ namespace RocketWars.Player
             _binoculars = GetComponent<Binoculars>();
             _visual = GetComponent<PlayerVisual>();
             _net.HitConfirmed += OnHitConfirmed;
+            _health.TeamChanged += OnTeamChanged;
 
             // пистолет в руке «от первого лица»: дочерний объект камеры
             var root = new GameObject("PistolViewModel").transform;
@@ -160,10 +161,28 @@ namespace RocketWars.Player
             return holder;
         }
 
+        /// <summary>Перешёл в другую команду: манжета рукава у перчатки — в цвете новой команды.</summary>
+        void OnTeamChanged(int team)
+        {
+            if (_model == null || _dual == null)
+                return;
+            var (handMesh, handMats) = Models.ViewModelHand(team);
+            foreach (var root in new[] { _model, _dual })
+                foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (filter.name != "Hand")
+                        continue;
+                    filter.sharedMesh = handMesh;
+                    filter.GetComponent<MeshRenderer>().sharedMaterials = handMats;
+                }
+        }
+
         void OnDestroy()
         {
             if (_net != null)
                 _net.HitConfirmed -= OnHitConfirmed;
+            if (_health != null)
+                _health.TeamChanged -= OnTeamChanged;
             if (_model != null)
                 Destroy(_model.gameObject);
             if (_dual != null)

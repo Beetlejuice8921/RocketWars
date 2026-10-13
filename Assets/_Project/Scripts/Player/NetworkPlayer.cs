@@ -45,7 +45,11 @@ namespace RocketWars.Player
         readonly NetworkVariable<bool> _crouch = new NetworkVariable<bool>(false,
             NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        /// <summary>Игрок попросил перейти в другую команду, когда закончится матч (ставит сервер).</summary>
+        readonly NetworkVariable<bool> _teamSwitchQueued = new NetworkVariable<bool>();
+
         public bool IsBot => _isBot.Value;
+        public bool TeamSwitchQueued => IsSpawned && _teamSwitchQueued.Value;
         public bool IsLocalHuman => IsOwner && !IsBot;
         public bool IsCrouching => _crouch.Value;
 
@@ -627,6 +631,22 @@ namespace RocketWars.Player
             if (silo == null || Vector3.Distance(transform.position, silo.Console.transform.position) > ConsoleRange)
                 return;
             silo.Console.ServerPress((ConsoleButtonKind)kind, this);
+        }
+
+        /// <summary>
+        /// Владелец: кнопка «Перейти в команду» в паузе. В лобби и после матча — переход сразу, во время матча —
+        /// запрос на переход после матча (повторное нажатие отменяет). Можно ли — решает сервер.
+        /// </summary>
+        public void RequestSwitchTeam() => SwitchTeamRpc();
+
+        [Rpc(SendTo.Server)]
+        void SwitchTeamRpc() => MatchNet.Instance?.ServerRequestTeamSwitch(this);
+
+        /// <summary>Сервер: запрос на смену команды после матча поставлен / снят.</summary>
+        public void ServerSetTeamSwitchQueued(bool queued)
+        {
+            if (IsServer && _teamSwitchQueued.Value != queued)
+                _teamSwitchQueued.Value = queued;
         }
 
         [Rpc(SendTo.Server)]

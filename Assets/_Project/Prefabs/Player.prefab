@@ -52,7 +52,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3334858849
+  GlobalObjectIdHash: 3889136347
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -117,13 +117,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4fa07c1a603d55c4b9161a032e36c10e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RocketWars.Player.FpsController
-  walkSpeed: 5
-  sprintSpeed: 7.5
-  crouchSpeed: 2.5
-  jumpHeight: 1.3
-  gravity: -22
-  stepOffset: 1.05
-  maxFallSpeed: 40
   standHeight: 2
   crouchHeight: 1.3
   downedHeight: 0.8

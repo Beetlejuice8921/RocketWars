@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using RocketWars.Combat;
+using RocketWars.Core;
 using RocketWars.Flags;
 using RocketWars.Launcher;
 using RocketWars.Loot;
@@ -61,6 +62,7 @@ namespace RocketWars.Net
         public const float BotBalanceInterval = 15f;
 
         readonly List<PlayerHealth> _balanceBots = new List<PlayerHealth>();
+        readonly List<NetworkPlayer> _switchQueue = new List<NetworkPlayer>(); // запросы смены команды во время матча
         float _botBalanceTimer = 1f; // первая проверка — сразу после старта хоста
         int _botCounter;
 
@@ -431,6 +433,106 @@ namespace RocketWars.Net
                 if (p.Team == 0) team0++;
                 else team1++;
             }
+        }
+
+        // ---------- смена команды ----------
+
+        /// <summary>
+        /// Почему игрок не может перейти в другую команду прямо сейчас (null — может). Считается и на клиенте
+        /// (кнопка в паузе), и на сервере: только в лобби или после матча, не на ракете, и люди в командах
+        /// после перехода различаются не больше чем на одного. Во время матча вместо этого — запрос (QueueTeamSwitch).
+        /// </summary>
+        public static string TeamSwitchBlocker(PlayerHealth player)
+        {
+            var match = MatchManager.Instance;
+            if (player == null || !player.IsSpawned || match == null || !match.CanStartMatch)
+                return Loc.T("Команду можно сменить только в лобби или после матча");
+            if (player.GetComponent<NetworkPlayer>().IsRiding)
+                return Loc.T("Сейчас нельзя сменить команду");
+            return Unbalanced(player) ? Loc.T("Команды станут неравными") : null;
+        }
+
+        static bool Unbalanced(PlayerHealth player)
+        {
+            CountHumans(out int h0, out int h1);
+            int from = player.Team == 0 ? h0 : h1, to = player.Team == 0 ? h1 : h0;
+            return Mathf.Abs(to + 1 - (from - 1)) > 1;
+        }
+
+        /// <summary>
+        /// Сервер, кнопка «Перейти в команду»: в лобби и после матча — сразу; во время матча — запрос (повторное
+        /// нажатие отменяет), который выполнится, когда матч закончится.
+        /// </summary>
+        public void ServerRequestTeamSwitch(NetworkPlayer player)
+        {
+            if (!IsServer || player == null || MatchManager.Instance == null)
+                return;
+            if (!MatchManager.Instance.CanStartMatch)
+            {
+                bool queued = !player.TeamSwitchQueued;
+                player.ServerSetTeamSwitchQueued(queued);
+                _switchQueue.Remove(player);
+                if (queued)
+                    _switchQueue.Add(player);
+                return;
+            }
+            var health = player.GetComponent<PlayerHealth>();
+            if (TeamSwitchBlocker(health) == null)
+                ApplyTeamSwitch(health);
+        }
+
+        /// <summary>
+        /// Сервер, каждый кадр после матча: выполнить запросы, сделанные во время матча, в порядке очереди.
+        /// Игроки из разных команд меняются местами парами (баланс не меняется), остальные — пока команды
+        /// не станут неравными; кому не хватило места, запрос снимается. Сидящий на ракете ждёт, пока слезет.
+        /// </summary>
+        public void ServerApplyQueuedSwitches()
+        {
+            _switchQueue.RemoveAll(p => p == null || !p.IsSpawned || !p.TeamSwitchQueued);
+            if (_switchQueue.Count == 0)
+                return;
+            var ready = _switchQueue.FindAll(p => !p.IsRiding);
+            var from0 = ready.FindAll(p => p.Health.Team == 0);
+            var from1 = ready.FindAll(p => p.Health.Team == 1);
+            int pairs = Mathf.Min(from0.Count, from1.Count);
+            for (int i = 0; i < pairs; i++)
+            {
+                ApplyTeamSwitch(from0[i].Health);
+                ApplyTeamSwitch(from1[i].Health);
+            }
+            foreach (var p in ready)
+            {
+                if (!p.TeamSwitchQueued)
+                    continue;
+                if (Unbalanced(p.Health))
+                {
+                    p.ServerSetTeamSwitchQueued(false);
+                    Debug.Log($"[RocketWars] {p.Health.DisplayName}: queued team switch dropped, teams would be uneven");
+                }
+                else
+                {
+                    ApplyTeamSwitch(p.Health);
+                }
+            }
+        }
+
+        /// <summary>Сервер: перевести игрока в другую команду — полное HP, без лута и берсерка, на свой новый остров.</summary>
+        void ApplyTeamSwitch(PlayerHealth player)
+        {
+            var np = player.GetComponent<NetworkPlayer>();
+            np.ServerSetTeamSwitchQueued(false);
+            _switchQueue.Remove(np);
+            // чужой флаг на спине возвращается домой — в новой команде он стал бы своим
+            foreach (var flag in _flags)
+                if (flag != null && flag.State == FlagState.Carried && flag.CarrierId == player.NetworkObjectId)
+                    flag.ServerReturnHome();
+            int team = 1 - player.Team;
+            player.ServerSetTeam(team);
+            player.ResetFull();
+            np.ServerResetLoadout();
+            np.ServerTeleport(_islands[team].GetRandomSpawnPoint(1f), FacingEnemy(team));
+            _botBalanceTimer = 0f; // боты-балансиры переставляются сразу, а не через 15 с
+            Debug.Log($"[RocketWars] {player.DisplayName} switched to team {team}");
         }
 
         // ---------- боты-балансиры ----------

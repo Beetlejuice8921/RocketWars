@@ -153,6 +153,7 @@ namespace RocketWars.Player
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
 
             _health.StateChanged += OnStateChanged;
+            _health.TeamChanged += OnTeamChanged;
             _health.Hurt += OnHurt;
             _wasDowned = _health.IsDowned;
             _lastPos = transform.position;
@@ -166,7 +167,30 @@ namespace RocketWars.Player
             if (_health == null)
                 return;
             _health.StateChanged -= OnStateChanged;
+            _health.TeamChanged -= OnTeamChanged;
             _health.Hurt -= OnHurt;
+        }
+
+        /// <summary>Перешёл в другую команду: перекрасить нашивки, рукава, полосу каски и берсерк-форму.</summary>
+        void OnTeamChanged(int team)
+        {
+            if (_body == null)
+                return;
+            SetModel(_body.Find("Torso"), Models.CharacterBody(team));
+            var arm = Models.CharacterArm(team);
+            SetModel(_armL, arm);
+            SetModel(_armR, arm);
+            (_helmetMesh, _helmetMats) = Models.CharacterHelmet(team);
+            SetModel(_helmet, (_helmetMesh, _helmetMats));
+            SetBerserkTeam(team);
+        }
+
+        static void SetModel(Transform part, (Mesh mesh, Material[] materials) model)
+        {
+            if (part == null)
+                return;
+            part.GetComponent<MeshFilter>().sharedMesh = model.mesh;
+            part.GetComponent<MeshRenderer>().sharedMaterials = model.materials;
         }
 
         /// <summary>Вскинуть руку с пистолетом (свой выстрел — вызывает PistolView).</summary>
