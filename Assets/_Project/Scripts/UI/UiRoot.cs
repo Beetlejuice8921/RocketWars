@@ -27,7 +27,9 @@ namespace RocketWars.UI
         ResultsView _results;
         OptionsView _options;
         bool _pauseOpen;
+        float _pauseOpenedAt;
         bool _resultsDismissed;
+        bool _wasInGame, _wasResultsModal, _playing;
 
         public static float Volume
         {
@@ -49,14 +51,20 @@ namespace RocketWars.UI
         {
             Build();
             Loc.Changed += Build;
+            GamePlatform.Initialized += Build; // имя игрока из аккаунта площадки
         }
 
-        void OnDisable() => Loc.Changed -= Build;
+        void OnDisable()
+        {
+            Loc.Changed -= Build;
+            GamePlatform.Initialized -= Build;
+        }
 
         /// <summary>Собрать интерфейс заново — при старте и при смене языка (все тексты и шрифт берутся заново).</summary>
         void Build()
         {
             bool optionsOpen = _options != null && _options.IsOpen; // язык меняют из опций — окно остаётся открытым
+            AudioListener.volume = Volume; // громкость могла прийти из облака площадки
             _hud?.Dispose();
             _results?.Dispose();
 
@@ -87,7 +95,22 @@ namespace RocketWars.UI
                 Instance = null;
         }
 
-        public void SetPause(bool open) => _pauseOpen = open;
+        public void SetPause(bool open)
+        {
+            if (open && !_pauseOpen)
+                _pauseOpenedAt = Time.unscaledTime;
+            _pauseOpen = open;
+        }
+
+        /// <summary>
+        /// Браузер сам снял захват мыши (Esc в браузере) — открываем паузу; захват вернётся кликом по «Продолжить».
+        /// </summary>
+        public void OnPointerLockLost()
+        {
+            var net = NetworkBootstrap.Instance;
+            if (net != null && net.IsRunning)
+                SetPause(true);
+        }
 
         void Update()
         {
@@ -120,6 +143,28 @@ namespace RocketWars.UI
             if (_options.IsOpen) _options.Update();
 
             CursorFree = !inGame || _pauseOpen || resultsModal || _options.IsOpen;
+            UpdatePlatform(inGame, resultsModal);
+        }
+
+        /// <summary>
+        /// События площадки: «играет / не играет» и межстраничная реклама — только вне раунда
+        /// (после итогов матча и при выходе в меню), чтобы не мешать сетевой игре.
+        /// </summary>
+        void UpdatePlatform(bool inGame, bool resultsModal)
+        {
+            var platform = GamePlatform.Current;
+            bool playing = inGame && !resultsModal && !_pauseOpen;
+            if (playing != _playing)
+            {
+                _playing = playing;
+                if (playing) platform.GameplayStarted();
+                else platform.GameplayStopped();
+            }
+
+            if ((resultsModal && !_wasResultsModal) || (_wasInGame && !inGame))
+                platform.ShowInterstitial(null);
+            _wasResultsModal = resultsModal;
+            _wasInGame = inGame;
         }
 
         void HandleKeys(bool inGame, MatchManager match)
@@ -144,8 +189,9 @@ namespace RocketWars.UI
             {
                 if (match != null && match.IsSpawned && match.Phase == MatchPhase.MatchEnd && !_resultsDismissed)
                     _resultsDismissed = true;
-                else
-                    _pauseOpen = !_pauseOpen;
+                // в браузере тот же Esc сначала снимает захват мыши, и пауза уже открыта (OnPointerLockLost) — не закрываем её сразу
+                else if (!_pauseOpen || Time.unscaledTime - _pauseOpenedAt > 0.3f)
+                    SetPause(!_pauseOpen);
             }
 
             // Enter у хоста — начать матч

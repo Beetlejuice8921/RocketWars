@@ -53,6 +53,10 @@
     align-items: center;
 }
 
+.row-center {
+    justify-content: center;
+}
+
 .grow {
     flex-grow: 1;
 }
@@ -130,10 +134,99 @@
 
 .list {
     min-height: 60px;
-    max-height: 190px;
+    max-height: 312px;
     background-color: rgba(0, 0, 0, 0.25);
     border-radius: 6px;
     margin: 4px;
+}
+
+/* полоса прокрутки списка: тонкая, без стрелок, в цвет панели */
+.list .unity-scroller--vertical {
+    width: 10px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.list .unity-scroller__low-button,
+.list .unity-scroller__high-button {
+    display: none;
+}
+
+.list .unity-scroller--vertical > .unity-scroller__slider {
+    margin: 0;
+    padding: 0;
+}
+
+.list .unity-scroller .unity-base-slider__tracker {
+    background-color: rgba(0, 0, 0, 0.25);
+    border-width: 0;
+    border-radius: 0;
+}
+
+.list .unity-scroller .unity-base-slider__dragger {
+    background-color: rgba(255, 255, 255, 0.28);
+    border-width: 0;
+    border-radius: 0;
+}
+
+.list .unity-scroller .unity-base-slider__dragger:hover {
+    background-color: rgba(255, 255, 255, 0.45);
+}
+
+/* код комнаты: клетка на каждый символ, ввод — невидимым полем поверх */
+.code-box {
+    align-items: center;
+    margin: 0 12px;
+}
+
+.code-row {
+    margin-top: 6px;
+}
+
+.code-side {
+    flex-grow: 1;
+    flex-basis: 0;
+    flex-direction: row;
+    align-items: center;
+}
+
+.code-side-left {
+    justify-content: flex-end;
+}
+
+.code-cells {
+    flex-direction: row;
+}
+
+.code-cell {
+    width: 44px;
+    height: 44px;
+    margin: 0 4px;
+    background-color: rgb(16, 18, 22);
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.22);
+    font-size: 20px;
+    -unity-text-align: middle-center;
+    color: rgb(240, 240, 240);
+}
+
+.code-cell--active {
+    border-color: rgb(80, 190, 100);
+}
+
+.code-cell--error {
+    border-color: rgb(220, 70, 60);
+    color: rgb(255, 110, 100);
+}
+
+.code-input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    opacity: 0;
 }
 
 .list-item {
@@ -159,6 +252,14 @@
 
 .menu-panel {
     width: 760px;
+}
+
+/* название игры над панелью меню */
+.menu-title {
+    font-size: 64px;
+    -unity-text-align: middle-center;
+    text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6);
+    margin-bottom: 28px;
 }
 
 /* левая колонка меню: «Опции» и «Выйти из игры» */

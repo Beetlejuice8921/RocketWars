@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using RocketWars.Core;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -33,6 +32,9 @@ namespace RocketWars.Net
         public ushort HostPort { get; private set; }
         bool _probingPorts;
 
+        /// <summary>Случайное имя по умолчанию — одно на запуск (иначе в меню, в названии комнаты и в игре выходили разные).</summary>
+        static string _randomName;
+
         static readonly Dictionary<ulong, string> Names = new Dictionary<ulong, string>();
         static bool _commandLineHandled;
 
@@ -41,7 +43,8 @@ namespace RocketWars.Net
 
         public string PlayerName
         {
-            get => PlayerPrefs.GetString("playerName", $"Player{UnityEngine.Random.Range(100, 999)}");
+            // своё имя из меню, иначе — из аккаунта площадки (Яндекс, VK)
+            get => PlayerPrefs.GetString("playerName", GamePlatform.Current.AccountName ?? (_randomName ??= $"Player{UnityEngine.Random.Range(100, 999)}"));
             set => PlayerPrefs.SetString("playerName", string.IsNullOrWhiteSpace(value) ? "Player" : value.Trim());
         }
 
@@ -56,6 +59,8 @@ namespace RocketWars.Net
             Manager.NetworkConfig.NetworkTransport = _transport;
             // клиент без ответа (вылет, выдернули кабель) считается отключённым через 10 с, а не через 30
             _transport.DisconnectTimeoutMS = DisconnectTimeoutMs;
+            // браузер умеет только WebSocket (Relay по wss)
+            _transport.UseWebSockets = GamePlatform.Current.IsWeb;
             Manager.NetworkConfig.ConnectionApproval = true;
             Manager.NetworkConfig.PlayerPrefab = null;
             // префаб игрока регистрируется через DefaultNetworkPrefabs (NGO собирает список автоматически)
@@ -83,7 +88,7 @@ namespace RocketWars.Net
         public static string GetPlayerName(ulong clientId) =>
             Names.TryGetValue(clientId, out var name) ? name : $"Player{clientId}";
 
-        void SetPayload() => Manager.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(PlayerName);
+        void SetPayload() => Manager.NetworkConfig.ConnectionData = NetProtocol.BuildPayload(PlayerName);
 
         // ---------- LAN ----------
 
@@ -158,6 +163,16 @@ namespace RocketWars.Net
         void Approve(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
             response.CreatePlayerObject = false;
+            NetProtocol.ParsePayload(request.Payload, out int version, out string name);
+            // свой (локальный) клиент хоста — всегда той же версии
+            if (request.ClientNetworkId != NetworkManager.ServerClientId && version != NetProtocol.Version)
+            {
+                Debug.LogWarning($"[RocketWars] client {request.ClientNetworkId} rejected: protocol {version}, ours {NetProtocol.Version}");
+                response.Approved = false;
+                response.Reason = NetProtocol.MismatchReason;
+                return;
+            }
+
             response.Approved = Manager.ConnectedClientsIds.Count < MaxPlayers;
             if (!response.Approved)
             {
@@ -165,9 +180,8 @@ namespace RocketWars.Net
                 return;
             }
 
-            string name = request.Payload != null && request.Payload.Length > 0
-                ? Encoding.UTF8.GetString(request.Payload, 0, Mathf.Min(request.Payload.Length, 64))
-                : $"Player{request.ClientNetworkId}";
+            if (string.IsNullOrEmpty(name))
+                name = $"Player{request.ClientNetworkId}";
             Names[request.ClientNetworkId] = name.Length > 24 ? name.Substring(0, 24) : name;
         }
 

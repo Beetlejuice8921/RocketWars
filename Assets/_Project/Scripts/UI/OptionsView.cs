@@ -157,6 +157,8 @@ namespace RocketWars.UI
             for (int i = 0; i < Loc.Count; i++)
             {
                 var lang = (Lang)i;
+                if (!Loc.IsAvailable(lang))
+                    continue;
                 var b = Ui.Btn(grid, Loc.NativeNames[i], () => Loc.Current = lang, "lang-option");
                 if (lang == Loc.Current)
                     b.AddToClassList("btn-primary");

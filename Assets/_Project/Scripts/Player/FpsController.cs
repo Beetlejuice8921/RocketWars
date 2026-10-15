@@ -290,10 +290,20 @@ namespace RocketWars.Player
             var wanted = free ? CursorLockMode.None : CursorLockMode.Locked;
             if (Cursor.lockState != wanted)
             {
+                // в браузере Esc снимает захват сам (а игра Esc может и не получить) — открываем паузу, а не захватываем снова
+                if (!free && _cursorWasLocked && GamePlatform.Current.IsWeb)
+                {
+                    _cursorWasLocked = false;
+                    UI.UiRoot.Instance?.OnPointerLockLost();
+                    return;
+                }
                 Cursor.lockState = wanted;
                 Cursor.visible = free;
             }
+            _cursorWasLocked = Cursor.lockState == CursorLockMode.Locked;
         }
+
+        bool _cursorWasLocked;
 
         /// <summary>
         /// Обзор мышью. Лёжа крутится только камера (_lookYaw), тело остаётся лежать как лежит —

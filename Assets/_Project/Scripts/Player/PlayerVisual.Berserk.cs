@@ -25,6 +25,9 @@ namespace RocketWars.Player
         Mesh _capMesh;
         Material[] _capMats;
         GameObject _bChest, _bCap, _bGlasses, _bCigar, _bEpaulettes, _bGunL, _bGunR;
+
+        /// <summary>Сигара у берсерка (выключается для ролика; кандидат на отключение в веб-версии ради рейтинга 12+).</summary>
+        public static bool ShowCigar = true;
         Transform _bGunMuzzleL, _bGunMuzzleR, _rays;
         Light _rayLight;
         Transform[] _rayBeams;
@@ -183,7 +186,7 @@ namespace RocketWars.Player
             _bChest.SetActive(on);
             _bCap.SetActive(on);
             _bGlasses.SetActive(on);
-            _bCigar.SetActive(on);
+            _bCigar.SetActive(on && ShowCigar);
             _bEpaulettes.SetActive(on);
             _bGunL.SetActive(on);
             _bGunR.SetActive(on);
@@ -241,7 +244,7 @@ namespace RocketWars.Player
                 _powerUpPlayed = true;
                 // сигара дымит (свою — от первого лица — не показываем: дым лез бы прямо в камеру)
                 bool ownFirstPerson = _controller != null && _controller.IsLocal;
-                if (!ownFirstPerson && Time.time >= _nextCigarPuff)
+                if (!ownFirstPerson && ShowCigar && Time.time >= _nextCigarPuff)
                 {
                     _nextCigarPuff = Time.time + Random.Range(0.25f, 0.5f);
                     // тонкая струйка с кончика сигары: вверх и чуть вбок, мелкими клубками, чтобы не закрывать лицо

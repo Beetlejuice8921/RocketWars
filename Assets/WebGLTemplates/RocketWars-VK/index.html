@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <!-- VK Bridge (VK Игры / Одноклассники) -->
+    <script src="https://cdn.jsdelivr.net/npm/@vkontakte/vk-bridge@2/dist/browser.min.js"></script>
+    <script>
+      // VK ждёт VKWebAppInit не дольше 30 с после открытия — шлём сразу, не дожидаясь загрузки сборки (~20 МБ).
+      // Ответ подхватывает RWPlatform.jslib (RW_Init).
+      window.RWVkInit = typeof vkBridge !== "undefined" ? vkBridge.send("VKWebAppInit") : null;
+      if (window.RWVkInit) window.RWVkInit.catch(function (e) { console.warn("[RW] VKWebAppInit failed", e); });
+    </script>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+      #unity-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #000; outline: none; }
+      #loader { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(60vw, 480px); text-align: center;
+        font: 16px monospace; color: #fff; image-rendering: pixelated; }
+      #loader-title { letter-spacing: 4px; margin-bottom: 16px; }
+      #loader-bar { height: 16px; border: 4px solid #fff; padding: 4px; }
+      #loader-fill { height: 100%; width: 0; background: #e8c547; }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loader">
+      <div id="loader-title">ROCKET WARS</div>
+      <div id="loader-bar"><div id="loader-fill"></div></div>
+    </div>
+    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+      // правая кнопка — бинокль/прицел: контекстное меню браузера не нужно (и долгое нажатие на мобильных)
+      canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      // пробел, Tab (таблица счёта) и стрелки не должны прокручивать страницу внутри iframe площадки
+      window.addEventListener("keydown", function (e) {
+        if (["Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) >= 0) e.preventDefault();
+      });
+      canvas.addEventListener("pointerdown", function () { canvas.focus(); });
+
+      createUnityInstance(canvas, {
+        arguments: [],
+        dataUrl: "Build/{{{ DATA_FILENAME }}}",
+        frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_THREADS
+        workerUrl: "Build/{{{ WORKER_FILENAME }}}",
+#endif
+#if USE_WASM
+        codeUrl: "Build/{{{ CODE_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        // пиксельная графика: рендер в CSS-пикселях, без удвоения на HiDPI — быстрее и не теряет стиль
+        devicePixelRatio: 1,
+      }, function (progress) {
+        document.querySelector("#loader-fill").style.width = Math.round(progress * 100) + "%";
+      }).then(function () {
+        document.querySelector("#loader").remove();
+        canvas.focus();
+      }).catch(function (message) {
+        document.querySelector("#loader-title").textContent = message;
+      });
+    </script>
+  </body>
+</html>

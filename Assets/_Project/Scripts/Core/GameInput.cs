@@ -26,7 +26,8 @@ namespace RocketWars.Core
 
         static readonly int[] Defaults =
         {
-            (int)Key.W, (int)Key.S, (int)Key.A, (int)Key.D, (int)Key.Space, (int)Key.LeftShift, (int)Key.LeftCtrl,
+            (int)Key.W, (int)Key.S, (int)Key.A, (int)Key.D, (int)Key.Space, (int)Key.LeftShift,
+            GamePlatform.Current.IsWeb ? (int)Key.C : (int)Key.LeftCtrl, // в браузере Ctrl+W закрывает вкладку
             (int)Key.E, (int)Key.Q, MouseLeft, MouseRight
         };
 
@@ -69,9 +70,32 @@ namespace RocketWars.Core
             }
         }
 
-        public static bool IsPressed(GameAction action) => Control(Binds[(int)action]) is ButtonControl c && c.isPressed;
+        public static bool IsPressed(GameAction action) =>
+            Control(Binds[(int)action]) is ButtonControl c && c.isPressed || SimulatedHeld(action);
 
-        public static bool WasPressed(GameAction action) => Control(Binds[(int)action]) is ButtonControl c && c.wasPressedThisFrame;
+        public static bool WasPressed(GameAction action) =>
+            Control(Binds[(int)action]) is ButtonControl c && c.wasPressedThisFrame || SimulatedDown(action);
+
+#if UNITY_EDITOR
+        // Редактор: «зажатые» из кода действия — запись ролика и проверки, когда окно Unity не в фокусе (ввод не доходит)
+        static readonly System.Collections.Generic.Dictionary<GameAction, int> Simulated = new System.Collections.Generic.Dictionary<GameAction, int>();
+
+        public static void Simulate(GameAction action, bool held)
+        {
+            if (!held) Simulated.Remove(action);
+            else if (!Simulated.ContainsKey(action)) Simulated[action] = Time.frameCount;
+        }
+
+        public static void ClearSimulated() => Simulated.Clear();
+
+        static bool SimulatedHeld(GameAction action) => Simulated.ContainsKey(action);
+
+        static bool SimulatedDown(GameAction action) => Simulated.TryGetValue(action, out int frame) && Time.frameCount - frame <= 1;
+#else
+        static bool SimulatedHeld(GameAction action) => false;
+
+        static bool SimulatedDown(GameAction action) => false;
+#endif
 
         public static int Get(GameAction action) => Binds[(int)action];
 
@@ -85,6 +109,13 @@ namespace RocketWars.Core
                     Save(i, old);
             Save((int)action, code);
             PlayerPrefs.Save();
+        }
+
+        /// <summary>Перечитать клавиши и чувствительность (PlayerPrefs пришли из облака площадки).</summary>
+        public static void ReloadSaved()
+        {
+            _binds = null;
+            _sensitivity = null;
         }
 
         public static void ResetAll()
@@ -102,7 +133,9 @@ namespace RocketWars.Core
         }
 
         /// <summary>Esc, Tab и Enter заняты интерфейсом (пауза, итоги, старт матча).</summary>
-        public static bool IsReserved(Key key) => key == Key.Escape || key == Key.Tab || key == Key.Enter || key == Key.NumpadEnter;
+        public static bool IsReserved(Key key) => key == Key.Escape || key == Key.Tab || key == Key.Enter || key == Key.NumpadEnter
+            // в браузере сочетания с Ctrl/Cmd (Ctrl+W, Ctrl+R…) перехватывает сам браузер
+            || GamePlatform.Current.IsWeb && (key == Key.LeftCtrl || key == Key.RightCtrl || key == Key.LeftMeta || key == Key.RightMeta);
 
         /// <summary>Первая нажатая в этом кадре клавиша или кнопка мыши (для переназначения).</summary>
         public static bool TryCapture(out int code)

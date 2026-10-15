@@ -51,6 +51,9 @@ namespace RocketWars.Core
             Fade(_match, inMatch ? MatchVolume : 0f);
         }
 
+        /// <summary>Источники, поставленные на паузу затуханием (src.time не читаем: в браузере звук грузится асинхронно и Unity ругается).</summary>
+        static readonly System.Collections.Generic.HashSet<AudioSource> Paused = new System.Collections.Generic.HashSet<AudioSource>();
+
         static void Fade(AudioSource src, float target)
         {
             if (src == null)
@@ -58,11 +61,14 @@ namespace RocketWars.Core
             src.volume = Mathf.MoveTowards(src.volume, target, FadeSpeed * Time.unscaledDeltaTime);
             if (src.volume > 0f && !src.isPlaying)
             {
-                if (src.time > 0f) src.UnPause();
+                if (Paused.Remove(src)) src.UnPause();
                 else src.Play();
             }
             else if (src.volume <= 0f && src.isPlaying)
+            {
                 src.Pause(); // продолжит с того же места
+                Paused.Add(src);
+            }
         }
     }
 }

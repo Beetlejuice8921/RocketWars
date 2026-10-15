@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace RocketWars.Core
@@ -8,28 +7,46 @@ namespace RocketWars.Core
     /// <summary>Языки игры (порядок — как в меню выбора; колонки таблицы сопоставляются по кодам из её заголовка).</summary>
     public enum Lang
     {
-        En, Ru, ZhHans, Es, PtBr, De, Fr, Ja, Ko, Tr, Pl, Hi, Uk, It, Id
+        En, Ru, ZhHans, Es, PtBr, De, Fr, Ja, Ko, Tr, Pl, Hi, Uk, It, Id, Be, Kk, Uz
     }
 
     /// <summary>
     /// Локализация. Ключ строки — её русский текст (так код остаётся читаемым, а русский язык не требует таблицы).
     /// Переводы — Resources/Loc/strings.txt (TSV в .txt — так Unity импортирует его как TextAsset): первая строка — коды языков, дальше «ключ\tперевод\t…»; \n в ячейке — перенос.
-    /// Нет перевода — английский, нет и его — сам ключ. Язык по умолчанию — язык интерфейса Windows, выбор хранится в PlayerPrefs.
+    /// Нет перевода — английский, нет и его — сам ключ. Язык по умолчанию даёт площадка (GamePlatform.DetectLanguage), выбор хранится в PlayerPrefs.
     /// </summary>
     public static class Loc
     {
         const string PrefKey = "language";
 
-        static readonly string[] Codes = { "en", "ru", "zh-Hans", "es", "pt-BR", "de", "fr", "ja", "ko", "tr", "pl", "hi", "uk", "it", "id" };
+        static readonly string[] Codes = { "en", "ru", "zh-Hans", "es", "pt-BR", "de", "fr", "ja", "ko", "tr", "pl", "hi", "uk", "it", "id", "be", "kk", "uz" };
 
         /// <summary>Название языка на нём самом — для меню выбора.</summary>
         public static readonly string[] NativeNames =
         {
             "English", "Русский", "简体中文", "Español", "Português (Brasil)", "Deutsch", "Français", "日本語", "한국어",
-            "Türkçe", "Polski", "हिन्दी", "Українська", "Italiano", "Bahasa Indonesia"
+            "Türkçe", "Polski", "हिन्दी", "Українська", "Italiano", "Bahasa Indonesia", "Беларуская", "Қазақша", "O‘zbekcha"
         };
 
         public static int Count => Codes.Length;
+
+        /// <summary>Хинди без системного шрифта Nirmala UI (браузер) не отрисовать — там его нет в списке.</summary>
+        public static bool IsAvailable(Lang lang) => lang != Lang.Hi || GamePlatform.Current.HasSystemFonts;
+
+        /// <summary>Игрок сам выбирал язык в меню.</summary>
+        public static bool HasSavedChoice => PlayerPrefs.GetInt(PrefKey, -1) >= 0;
+
+        /// <summary>Язык по умолчанию от площадки (не сохраняется: пока игрок не выберет свой, каждый запуск берётся заново).</summary>
+        public static void SetDefault(Lang lang)
+        {
+            if (!IsAvailable(lang) || _current == lang)
+                return;
+            _current = lang;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Перечитать сохранённый выбор (PlayerPrefs пришли из облака площадки).</summary>
+        public static void ReloadSaved() => _current = null;
 
         /// <summary>Язык сменили (интерфейс пересобирается).</summary>
         public static event Action Changed;
@@ -44,7 +61,9 @@ namespace RocketWars.Core
                 if (_current == null)
                 {
                     int saved = PlayerPrefs.GetInt(PrefKey, -1);
-                    _current = saved >= 0 && saved < Codes.Length ? (Lang)saved : DetectSystem();
+                    _current = saved >= 0 && saved < Codes.Length ? (Lang)saved : GamePlatform.Current.DetectLanguage();
+                    if (!IsAvailable(_current.Value))
+                        _current = Lang.En;
                 }
                 return _current.Value;
             }
@@ -120,66 +139,5 @@ namespace RocketWars.Core
                 _table[key] = row;
             }
         }
-
-        // ---------- язык системы ----------
-
-        /// <summary>Язык интерфейса Windows → язык игры; неподдерживаемый — английский.</summary>
-        static Lang DetectSystem()
-        {
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            try
-            {
-                // Application.systemLanguage не знает хинди и не различает варианты португальского — берём LANGID
-                int primary = GetUserDefaultUILanguage() & 0x3FF;
-                switch (primary)
-                {
-                    case 0x09: return Lang.En;
-                    case 0x19: return Lang.Ru;
-                    case 0x04: return Lang.ZhHans; // традиционный китайский тоже сюда — ближе, чем английский
-                    case 0x0A: return Lang.Es;
-                    case 0x16: return Lang.PtBr;
-                    case 0x07: return Lang.De;
-                    case 0x0C: return Lang.Fr;
-                    case 0x11: return Lang.Ja;
-                    case 0x12: return Lang.Ko;
-                    case 0x1F: return Lang.Tr;
-                    case 0x15: return Lang.Pl;
-                    case 0x39: return Lang.Hi;
-                    case 0x22: return Lang.Uk;
-                    case 0x10: return Lang.It;
-                    case 0x21: return Lang.Id;
-                    default: return Lang.En;
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[RocketWars] system language detection failed: {e.Message}");
-            }
-#endif
-            switch (Application.systemLanguage)
-            {
-                case SystemLanguage.Russian: return Lang.Ru;
-                case SystemLanguage.Chinese:
-                case SystemLanguage.ChineseSimplified:
-                case SystemLanguage.ChineseTraditional: return Lang.ZhHans;
-                case SystemLanguage.Spanish: return Lang.Es;
-                case SystemLanguage.Portuguese: return Lang.PtBr;
-                case SystemLanguage.German: return Lang.De;
-                case SystemLanguage.French: return Lang.Fr;
-                case SystemLanguage.Japanese: return Lang.Ja;
-                case SystemLanguage.Korean: return Lang.Ko;
-                case SystemLanguage.Turkish: return Lang.Tr;
-                case SystemLanguage.Polish: return Lang.Pl;
-                case SystemLanguage.Ukrainian: return Lang.Uk;
-                case SystemLanguage.Italian: return Lang.It;
-                case SystemLanguage.Indonesian: return Lang.Id;
-                default: return Lang.En;
-            }
-        }
-
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-        [DllImport("kernel32.dll")]
-        static extern ushort GetUserDefaultUILanguage();
-#endif
     }
 }

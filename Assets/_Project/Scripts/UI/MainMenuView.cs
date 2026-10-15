@@ -15,30 +15,41 @@ namespace RocketWars.UI
     {
         const float ListRefreshInterval = 1f;
 
+        /// <summary>Длина кода комнаты (код сессии Unity Multiplayer — 6 символов).</summary>
+        const int CodeLength = 6;
+
         readonly VisualElement _screen;
         readonly TextField _name, _ip, _code;
         readonly ScrollView _list;
         readonly Label _status;
         readonly Toggle _bots;
+        readonly Button _joinCode;
+        Label[] _codeCells;
+        bool _codeFocused, _codeError, _joiningByCode;
         readonly List<Button> _actions = new List<Button>();
         IList<ISessionInfo> _sessions;
         bool? _visible; // null — ещё ни разу не показывали/не прятали
         bool _busy;
         float _nextListRefresh;
         string _listSignature;
+        static bool _readyReported;
 
         static NetworkBootstrap Net => NetworkBootstrap.Instance;
-        static LanDiscovery Lan => Net != null ? Net.GetComponent<LanDiscovery>() : null;
+        static LanDiscovery Lan => Net != null && GamePlatform.Current.SupportsLan ? Net.GetComponent<LanDiscovery>() : null;
 
         public MainMenuView(VisualElement root)
         {
             _screen = Ui.El(root, "layer", "menu-screen");
             var side = Ui.El(_screen, "menu-side");
             Ui.Btn(side, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions(), "menu-side-btn");
-            Ui.Btn(side, Loc.T("Выйти из игры"), Quit, "btn-danger", "menu-side-btn");
+            if (GamePlatform.Current.SupportUrl != null)
+                Ui.Btn(side, Loc.T("Поддержка"), () => GamePlatform.Current.OpenSupport(), "menu-side-btn");
+            if (GamePlatform.Current.CanQuit)
+                Ui.Btn(side, Loc.T("Выйти из игры"), () => GamePlatform.Current.Quit(), "btn-danger", "menu-side-btn");
 
+            // название — над панелью, крупно
+            var title = Ui.Text(_screen, "ROCKET WARS", "menu-title", "shadow");
             var panel = Ui.El(_screen, "panel", "menu-panel");
-            var title = Ui.Text(panel, "ROCKET WARS", "title", "shadow");
             Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
 
             var nameRow = Ui.El(panel, "row");
@@ -46,10 +57,14 @@ namespace RocketWars.UI
             _name = Ui.Field(nameRow, Net != null ? Net.PlayerName : "Player", 24, "grow");
             _name.RegisterValueChangedCallback(e => { if (Net != null) Net.PlayerName = e.newValue; });
 
-            Ui.Text(panel, Loc.T("СОЗДАТЬ КОМНАТУ"), "section");
+            // с LAN — заголовок и две кнопки (сеть / интернет); без LAN (браузер) — одна кнопка «Создать комнату»
+            bool lan = GamePlatform.Current.SupportsLan;
+            if (lan)
+                Ui.Text(panel, Loc.T("СОЗДАТЬ КОМНАТУ"), "section");
             var createRow = Ui.El(panel, "row");
-            _actions.Add(Ui.Btn(createRow, Loc.T("В локальной сети"), CreateLan, "btn-primary", "grow"));
-            _actions.Add(Ui.Btn(createRow, Loc.T("В интернете"), CreateInternet, "btn-primary", "grow"));
+            if (lan)
+                _actions.Add(Ui.Btn(createRow, Loc.T("В локальной сети"), CreateLan, "btn-primary", "grow"));
+            _actions.Add(Ui.Btn(createRow, Loc.T(lan ? "В интернете" : "Создать комнату"), CreateInternet, "btn-primary", "grow"));
             _bots = new Toggle(" " + Loc.T("Тестовые боты")) { value = MatchNet.SpawnTestBots };
             _bots.AddToClassList("label-dim");
             _bots.RegisterValueChangedCallback(e => MatchNet.SpawnTestBots = e.newValue);
@@ -57,21 +72,23 @@ namespace RocketWars.UI
             Ui.Show(_bots, Debug.isDebugBuild); // тестовые боты — только для разработки
 
             Ui.Text(panel, Loc.T("ПОИСК КОМНАТЫ"), "section");
-            _list = new ScrollView();
+            _list = new ScrollView(ScrollViewMode.Vertical);
             _list.AddToClassList("list");
             panel.Add(_list);
-            var refreshRow = Ui.El(panel, "row");
+            var refreshRow = Ui.El(panel, "row", "row-center");
             _actions.Add(Ui.Btn(refreshRow, Loc.T("Обновить интернет-комнаты"), RefreshSessions, "btn-small"));
 
             var ipRow = Ui.El(panel, "row");
             Ui.Text(ipRow, "IP", "label-dim");
             _ip = Ui.Field(ipRow, "127.0.0.1", 64, "grow");
             _actions.Add(Ui.Btn(ipRow, Loc.T("Подключиться"), JoinTypedAddress, "btn-small"));
+            Ui.Show(ipRow, GamePlatform.Current.SupportsLan);
 
-            var codeRow = Ui.El(panel, "row");
-            Ui.Text(codeRow, Loc.T("Код"), "label-dim");
-            _code = Ui.Field(codeRow, "", 12, "grow");
-            _actions.Add(Ui.Btn(codeRow, Loc.T("Войти по коду"), () => JoinCode(_code.value), "btn-small"));
+            // клетки — точно по центру панели: подпись и кнопка в равных боковых колонках, прижаты к клеткам
+            var codeRow = Ui.El(panel, "row", "code-row");
+            Ui.Text(Ui.El(codeRow, "code-side", "code-side-left"), Loc.T("Код"), "label-dim");
+            _code = BuildCodeInput(codeRow);
+            _joinCode = Ui.Btn(Ui.El(codeRow, "code-side"), Loc.T("Войти по коду"), () => JoinCode(_code.value), "btn-small");
 
             _status = Ui.Text(panel, NetworkBootstrap.LastMessage ?? "", "status");
         }
@@ -84,6 +101,11 @@ namespace RocketWars.UI
             Ui.Show(_screen, visible);
             if (visible)
             {
+                if (!_readyReported)
+                {
+                    _readyReported = true;
+                    GamePlatform.Current.GameReady();
+                }
                 Lan?.StartListening();
                 _status.text = NetworkBootstrap.LastMessage ?? "";
                 if (Net != null)
@@ -97,6 +119,7 @@ namespace RocketWars.UI
         {
             foreach (var b in _actions)
                 b.SetEnabled(!_busy);
+            _joinCode.SetEnabled(!_busy && _code.value.Length == CodeLength);
 
             if (Time.unscaledTime < _nextListRefresh)
                 return;
@@ -130,10 +153,12 @@ namespace RocketWars.UI
                 foreach (var s in _sessions)
                 {
                     var id = s.Id;
-                    AddListItem($"{Loc.T("Интернет")} · {s.Name} · {s.MaxPlayers - s.AvailableSlots}/{s.MaxPlayers}", () => JoinSession(id));
+                    // без LAN все комнаты интернетные — приставка «Интернет ·» не нужна
+                    string players = $"{s.MaxPlayers - s.AvailableSlots}/{s.MaxPlayers}";
+                    AddListItem(lan != null ? $"{Loc.T("Интернет")} · {s.Name} · {players}" : $"{s.Name} · {players}", () => JoinSession(id));
                 }
 
-            if (_list.childCount == 0)
+            if (_list.childCount == 0 && GamePlatform.Current.SupportsLan)
                 Ui.Text(_list, lan != null && lan.IsListening ? "  " + Loc.T("Ищем комнаты в сети…") : "  " + Loc.F("Поиск в сети недоступен: {0}", lan?.Error), "label-dim");
         }
 
@@ -142,6 +167,72 @@ namespace RocketWars.UI
             var item = Ui.El(_list, "list-item");
             Ui.Text(item, text);
             _actions.Add(Ui.Btn(item, Loc.T("Войти"), join, "btn-small", "btn-primary"));
+        }
+
+        // ---------- поле кода ----------
+
+        /// <summary>
+        /// Код комнаты — клетка на каждый символ. Ввод принимает невидимый TextField поверх клеток,
+        /// поэтому клик, вставка из буфера и Enter работают как в обычном поле.
+        /// </summary>
+        TextField BuildCodeInput(VisualElement parent)
+        {
+            var box = Ui.El(parent, "code-box");
+            var cells = Ui.El(box, "code-cells");
+            _codeCells = new Label[CodeLength];
+            for (int i = 0; i < CodeLength; i++)
+                _codeCells[i] = Ui.Text(cells, "", "code-cell");
+
+            // запас по длине: вставка « 77lwnq » с пробелами и дефисами не должна обрезаться до очистки
+            var field = Ui.Field(cells, "", 64, "code-input");
+            field.RegisterValueChangedCallback(e =>
+            {
+                string clean = CleanCode(e.newValue);
+                if (clean.Length > CodeLength)
+                {
+                    // лишний символ при наборе в полное поле — игнорируем; вставили целый код поверх набранного — берём вставленный
+                    string prev = CleanCode(e.previousValue);
+                    clean = clean.Length - prev.Length > 1 ? clean.Substring(clean.Length - CodeLength) : prev;
+                }
+                if (clean != e.newValue)
+                {
+                    field.SetValueWithoutNotify(clean);
+                    field.SelectRange(clean.Length, clean.Length);
+                }
+                _codeError = false;
+                UpdateCodeCells();
+            });
+            field.RegisterCallback<FocusInEvent>(_ => { _codeFocused = true; UpdateCodeCells(); });
+            field.RegisterCallback<FocusOutEvent>(_ => { _codeFocused = false; UpdateCodeCells(); });
+            field.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if ((e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter) && _joinCode.enabledSelf)
+                    JoinCode(field.value);
+            }, TrickleDown.TrickleDown);
+            return field;
+        }
+
+        /// <summary>Только латинские буквы и цифры, заглавными (длину ограничивает вызывающий).</summary>
+        static string CleanCode(string s)
+        {
+            var sb = new System.Text.StringBuilder(CodeLength);
+            foreach (char c in s ?? "")
+                if (c < 128 && char.IsLetterOrDigit(c))
+                    sb.Append(char.ToUpperInvariant(c));
+            return sb.ToString();
+        }
+
+        void UpdateCodeCells()
+        {
+            string v = _code.value ?? "";
+            int active = Mathf.Min(v.Length, CodeLength - 1);
+            for (int i = 0; i < CodeLength; i++)
+            {
+                var cell = _codeCells[i];
+                cell.text = i < v.Length ? v[i].ToString() : "";
+                cell.EnableInClassList("code-cell--active", _codeFocused && i == active);
+                cell.EnableInClassList("code-cell--error", _codeError);
+            }
         }
 
         // ---------- действия ----------
@@ -179,6 +270,7 @@ namespace RocketWars.UI
 
         void CreateInternet()
         {
+            _joiningByCode = false;
             SetBusy(Loc.T("Создаём комнату…"));
             Net.CreateInternetSession(OnAsyncDone);
         }
@@ -187,12 +279,14 @@ namespace RocketWars.UI
         {
             if (string.IsNullOrWhiteSpace(code))
                 return;
+            _joiningByCode = true;
             SetBusy(Loc.T("Подключаемся…"));
             Net.JoinInternetSession(code, true, OnAsyncDone);
         }
 
         void JoinSession(string id)
         {
+            _joiningByCode = false;
             SetBusy(Loc.T("Подключаемся…"));
             Net.JoinInternetSession(id, false, OnAsyncDone);
         }
@@ -225,21 +319,17 @@ namespace RocketWars.UI
             _status.text = error ?? "";
             if (error == null)
                 Lan?.StopListening();
+            else if (_joiningByCode)
+            {
+                _codeError = true; // неверный код — клетки красные, пока код не поправят
+                UpdateCodeCells();
+            }
         }
 
         void Fail(string message)
         {
             _status.text = message;
             Lan?.StartListening();
-        }
-
-        static void Quit()
-        {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
         }
     }
 }
