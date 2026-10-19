@@ -370,7 +370,9 @@ namespace RocketWars.UI
                     case MatchPhase.MatchEnd:
                         banner = myTeam < 0 ? Loc.F("ПОБЕДИЛИ {0}", RuntimeMaterials.TeamName(s.Winner)) : myTeam == s.Winner ? Loc.T("ПОБЕДА!") : Loc.T("ПОРАЖЕНИЕ");
                         bannerColor = RuntimeMaterials.TeamColor(s.Winner);
-                        sub = match.IsServer ? Loc.T("Enter — новый матч, Tab — итоги") : Loc.T("Tab — итоги");
+                        sub = TouchInput.Enabled
+                            ? match.IsServer ? Loc.T("[СТАРТ] — новый матч") : ""
+                            : match.IsServer ? Loc.T("Enter — новый матч, Tab — итоги") : Loc.T("Tab — итоги");
                         break;
                 }
             }
@@ -393,7 +395,7 @@ namespace RocketWars.UI
             string teams = $"{RuntimeMaterials.TeamName(0)}: {n0}   ·   {RuntimeMaterials.TeamName(1)}: {n1}";
             if (!match.IsServer)
                 return $"{teams}\n{Loc.T("Матч начнёт хост")}";
-            return $"{teams}\n{match.StartBlocker() ?? Loc.T("Enter — начать матч")}";
+            return $"{teams}\n{match.StartBlocker() ?? Loc.T(TouchInput.Enabled ? "[СТАРТ] — начать матч" : "Enter — начать матч")}";
         }
 
         void UpdatePlayer(NetworkPlayer me, PlayerHealth health)
@@ -503,8 +505,8 @@ namespace RocketWars.UI
             {
                 string reload = reloading > 0 ? Loc.F(" · перезарядка: {0} (ближайшая {1} с)", reloading, next) : "";
                 _info.text = Loc.F("Команда: {0}", RuntimeMaterials.TeamName(health.Team)) + "\n" +
-                             Loc.F("Шахт: {0} · готово: {1}", alivesilos, ready) + reload + "\n" +
-                             Loc.T("Tab — итоги · Esc — пауза");
+                             Loc.F("Шахт: {0} · готово: {1}", alivesilos, ready) + reload +
+                             (TouchInput.Enabled ? "" : "\n" + Loc.T("Tab — итоги · Esc — пауза")); // на телефоне — кнопки «II» и «СЧЁТ»
             }
         }
 

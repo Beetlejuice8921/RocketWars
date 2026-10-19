@@ -1241,3 +1241,76 @@
     -unity-font-style: bold;
     margin-bottom: 4px;
 }
+
+/* ---------- сенсорное управление (UI/TouchControls): телефон, база 1920×1080 с масштабом ×1.4 ---------- */
+.touch-btn {
+    position: absolute;
+    align-items: center;
+    justify-content: center;
+    border-width: 4px;
+    border-color: rgba(255, 255, 255, 0.75);
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.touch-pressed {
+    background-color: rgba(232, 197, 71, 0.6);
+    border-color: rgb(255, 255, 255);
+}
+
+.touch-label {
+    font-size: 16px;
+    color: rgb(255, 255, 255);
+    -unity-text-align: middle-center;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7);
+}
+
+.touch-fire { right: 56px; bottom: 70px; width: 190px; height: 190px; }
+.touch-fire .touch-label { font-size: 20px; }
+.touch-jump { right: 270px; bottom: 40px; width: 130px; height: 120px; }
+.touch-crouch { right: 270px; bottom: 182px; width: 130px; height: 100px; }
+.touch-aim { right: 76px; bottom: 286px; width: 150px; height: 100px; }
+.touch-use { right: 250px; bottom: 304px; width: 170px; height: 100px; }
+.touch-trick { right: 444px; bottom: 304px; width: 130px; height: 100px; }
+.touch-pause { left: 24px; top: 24px; width: 90px; height: 70px; }
+.touch-score { left: 130px; top: 24px; width: 120px; height: 70px; }
+
+/* джойстик: в покое — внизу слева бледной подсказкой, под пальцем — ярче */
+.touch-stick {
+    position: absolute;
+    left: 110px;
+    bottom: 90px;
+    width: 220px;
+    height: 220px;
+    border-width: 4px;
+    border-color: rgba(255, 255, 255, 0.3);
+    border-radius: 110px;
+    background-color: rgba(0, 0, 0, 0.15);
+    align-items: center;
+    justify-content: center;
+}
+
+.touch-stick-active {
+    border-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.touch-knob {
+    width: 96px;
+    height: 96px;
+    border-width: 4px;
+    border-color: rgb(255, 255, 255);
+    border-radius: 48px;
+    background-color: rgba(232, 197, 71, 0.55);
+}
+.touch-start { left: 50%; top: 440px; width: 260px; height: 90px; margin-left: -130px; background-color: rgba(46, 150, 70, 0.75); }
+.touch-start .touch-label { font-size: 22px; }
+
+/* телефон: код комнаты и сводка команды — под кнопками «II» и «СЧЁТ» */
+.touch-mode .room-code { top: 110px; }
+.touch-mode .info { top: 140px; }
+
+/* телефон: итоги во всю ширину (база 1920 там ~1500), пьедестал компактнее — иначе не влезает по высоте */
+.touch-mode .results-panel,
+.touch-mode .podium { width: 96%; }
+.touch-mode .podium-slot { scale: 0.56 0.56; transform-origin: 50% 0; margin: 0 -90px; }
+.touch-mode .podium { margin: 4px 0 4px 0; padding: 2px 0; }

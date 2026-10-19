@@ -54,7 +54,7 @@ namespace RocketWars.UI
             _buttons = Ui.El(_panel, "row");
             _buttons.style.justifyContent = Justify.Center;
             _newMatch = Ui.Btn(_buttons, Loc.T("Новый матч"), () => MatchManager.Instance?.RequestStartMatch(), "btn-primary");
-            Ui.Btn(_buttons, Loc.T("Закрыть (Esc)"), () => _dismiss?.Invoke());
+            Ui.Btn(_buttons, Loc.T(TouchInput.Enabled ? "Закрыть" : "Закрыть (Esc)"), () => _dismiss?.Invoke());
             Ui.Btn(_buttons, Loc.T("Выйти из комнаты"), () => NetworkBootstrap.Instance?.ReturnToMenu(), "btn-danger");
 
             _podium = Ui.El(_screen, "podium");

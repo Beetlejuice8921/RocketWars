@@ -4,7 +4,10 @@ using UnityEngine;
 
 namespace RocketWars.Player
 {
-    /// <summary>Локальный игрок: наводится прицелом на кнопку пульта и жмёт ЛКМ. Лежащий пультом не пользуется.</summary>
+    /// <summary>
+    /// Локальный игрок: наводится прицелом на кнопку пульта и жмёт ЛКМ; на телефоне — ещё и тапом прямо по кнопке.
+    /// Лежащий пультом не пользуется.
+    /// </summary>
     [RequireComponent(typeof(PlayerHealth))]
     public class PlayerInteractor : MonoBehaviour
     {
@@ -31,7 +34,7 @@ namespace RocketWars.Player
         void Update()
         {
             // клик, который только что захватил курсор, кнопку не нажимает
-            bool locked = Cursor.lockState == CursorLockMode.Locked;
+            bool locked = FpsController.LookActive;
             bool justLocked = locked && !_wasLocked;
             _wasLocked = locked;
 
@@ -45,6 +48,12 @@ namespace RocketWars.Player
 
             if (Hovered != null && !justLocked && GameInput.WasPressed(GameAction.Fire) && Hovered.IsInteractable)
                 Hovered.Console.RequestPress(Hovered.Kind);
+
+            // тап по экрану: кнопка пульта под пальцем (целиться в мелкие кнопки прицелом с телефона неудобно)
+            if (TouchInput.TryGetTap(out var tap) &&
+                Physics.Raycast(cam.ScreenPointToRay(tap), out var tapHit, range, ~0, QueryTriggerInteraction.Collide) &&
+                tapHit.collider.GetComponent<ConsoleButton>() is ConsoleButton tapped && tapped.IsInteractable)
+                tapped.Console.RequestPress(tapped.Kind);
         }
     }
 }

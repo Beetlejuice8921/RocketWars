@@ -121,6 +121,13 @@ namespace RocketWars.UI
                 b.SetEnabled(!_busy);
             _joinCode.SetEnabled(!_busy && _code.value.Length == CodeLength);
 
+            // игру открыли по приглашению друга — сразу в его комнату (код виден в клетках, при ошибке они покраснеют)
+            if (!_busy && Net != null && GamePlatform.Current.IsInitialized && GamePlatform.Current.TakeInviteCode() is string invite)
+            {
+                _code.value = invite;
+                JoinCode(invite);
+            }
+
             if (Time.unscaledTime < _nextListRefresh)
                 return;
             _nextListRefresh = Time.unscaledTime + ListRefreshInterval;

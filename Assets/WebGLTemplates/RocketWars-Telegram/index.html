@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes, viewport-fit=cover">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <!-- Telegram Mini App: SDK Telegram — первым скриптом в head (так требует Telegram), затем реклама Adsgram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+    <script>
+      // ready() сразу: Telegram убирает свою заглушку и показывает наш загрузчик. Ответ SDK подхватывает RWPlatform.jslib (RW_Init)
+      (function () {
+        var tg = window.Telegram && Telegram.WebApp;
+        if (!tg || !tg.initData) return; // открыто не из Telegram — обычный сайт
+        tg.ready();
+        tg.expand();
+        if (tg.isVersionAtLeast("6.1")) { tg.setHeaderColor("#000000"); tg.setBackgroundColor("#000000"); }
+        // свайп вниз по игре не должен сворачивать Telegram (Bot API 7.7)
+        if (tg.isVersionAtLeast("7.7")) tg.disableVerticalSwipes();
+        // на телефоне — во весь экран (Bot API 8.0)
+        var mobile = tg.platform === "android" || tg.platform === "ios";
+        if (mobile && tg.isVersionAtLeast("8.0")) tg.requestFullscreen();
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+      /* во весь экран Telegram рисует поверх свои кнопки — холст начинается под ними (переменные ставит telegram-web-app.js) */
+      /* и по бокам: на iPhone в альбомной ориентации вырез камеры и скругления срезают края */
+      #unity-canvas { position: fixed;
+        --rw-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+        --rw-left: max(var(--tg-safe-area-inset-left, 0px), env(safe-area-inset-left, 0px));
+        --rw-right: max(var(--tg-safe-area-inset-right, 0px), env(safe-area-inset-right, 0px));
+        --rw-bottom: max(var(--tg-safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+        top: var(--rw-top); left: var(--rw-left); bottom: var(--rw-bottom);
+        width: calc(100% - var(--rw-left) - var(--rw-right)); height: calc(100% - var(--rw-top) - var(--rw-bottom));
+        display: block; background: #000; outline: none; touch-action: none; -webkit-user-select: none; user-select: none; }
+      #loader { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(60vw, 480px); text-align: center;
+        font: 16px monospace; color: #fff; image-rendering: pixelated; }
+      #loader-title { letter-spacing: 4px; margin-bottom: 16px; }
+      #loader-bar { height: 16px; border: 4px solid #fff; padding: 4px; }
+      #loader-fill { height: 100%; width: 0; background: #e8c547; }
+      /* играют лёжа на боку: телефон вертикально — просим повернуть (экранное управление рассчитано на ширину) */
+      #rotate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000;
+        font: 16px/1.6 monospace; color: #fff; text-align: center; padding: 24px; box-sizing: border-box; z-index: 10; }
+      #rotate b { display: block; font-size: 40px; color: #e8c547; margin-bottom: 16px; }
+      @media (orientation: portrait) { body.mobile #rotate { display: flex; } }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loader">
+      <div id="loader-title">ROCKET WARS</div>
+      <div id="loader-bar"><div id="loader-fill"></div></div>
+    </div>
+    <div id="rotate"><div><b>&#8635;</b><span id="rotate-text">Поверните телефон горизонтально</span></div></div>
+    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+      // правая кнопка — бинокль/прицел: контекстное меню браузера не нужно (и долгое нажатие на мобильных)
+      canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+      // пробел, Tab (таблица счёта) и стрелки не должны прокручивать страницу
+      window.addEventListener("keydown", function (e) {
+        if (["Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) >= 0) e.preventDefault();
+      });
+      canvas.addEventListener("pointerdown", function () { canvas.focus(); });
+
+      // телефон: подсказка «поверните» (видна только в вертикальной ориентации, см. #rotate)
+      (function () {
+        var tg = window.Telegram && Telegram.WebApp;
+        var platform = tg && tg.platform;
+        var mobile = platform === "android" || platform === "ios" || /Android|iPhone|iPad/i.test(navigator.userAgent);
+        if (!mobile) return;
+        document.body.classList.add("mobile");
+        var user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+        var ru = /^(ru|uk|be|kk|uz)/.test((user && user.language_code) || navigator.language || "");
+        if (!ru) document.querySelector("#rotate-text").textContent = "Rotate your phone to landscape";
+      })();
+
+      createUnityInstance(canvas, {
+        arguments: [],
+        dataUrl: "Build/{{{ DATA_FILENAME }}}",
+        frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_THREADS
+        workerUrl: "Build/{{{ WORKER_FILENAME }}}",
+#endif
+#if USE_WASM
+        codeUrl: "Build/{{{ CODE_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        // пиксельная графика: рендер в CSS-пикселях, без удвоения на HiDPI — быстрее и не теряет стиль
+        devicePixelRatio: 1,
+      }, function (progress) {
+        document.querySelector("#loader-fill").style.width = Math.round(progress * 100) + "%";
+      }).then(function () {
+        document.querySelector("#loader").remove();
+        canvas.focus();
+      }).catch(function (message) {
+        document.querySelector("#loader-title").textContent = message;
+      });
+    </script>
+  </body>
+</html>

@@ -4,9 +4,9 @@ using UnityEngine;
 namespace RocketWars.Core
 {
     /// <summary>
-    /// Слой площадки (Steam / Яндекс Игры / VK): всё, чем сборки отличаются друг от друга, живёт здесь.
+    /// Слой площадки (Steam / Яндекс Игры / VK / Telegram): всё, чем сборки отличаются друг от друга, живёт здесь.
     /// Остальной код спрашивает только GamePlatform.Current и не знает, где запущен.
-    /// Площадку выбирает символ компиляции из профиля сборки (Editor/BuildAll): PLATFORM_YANDEX, PLATFORM_VK, иначе — Steam.
+    /// Площадку выбирает символ компиляции из профиля сборки (Editor/BuildAll): PLATFORM_YANDEX, PLATFORM_VK, PLATFORM_TELEGRAM, иначе — Steam.
     /// </summary>
     public abstract class GamePlatform
     {
@@ -27,6 +27,8 @@ namespace RocketWars.Core
             return new WebPlatform("yandex");
 #elif PLATFORM_VK
             return new WebPlatform("vk");
+#elif PLATFORM_TELEGRAM
+            return new WebPlatform("telegram");
 #elif UNITY_WEBGL
             return new WebPlatform("web");
 #else
@@ -36,7 +38,7 @@ namespace RocketWars.Core
 
         protected static void RaiseInitialized() => Initialized?.Invoke();
 
-        /// <summary>Код площадки для логов и аналитики: steam, yandex, vk.</summary>
+        /// <summary>Код площадки для логов и аналитики: steam, yandex, vk, telegram.</summary>
         public abstract string Id { get; }
 
         /// <summary>Браузерная сборка: только WebSocket, без LAN и без выхода из игры.</summary>
@@ -80,6 +82,17 @@ namespace RocketWars.Core
             if (!string.IsNullOrEmpty(SupportUrl))
                 Application.OpenURL(SupportUrl);
         }
+
+        /// <summary>Кнопка «Позвать друга»: ссылка, открывающая игру сразу в комнате с этим кодом.</summary>
+        public virtual bool CanInvite => false;
+
+        public virtual void Invite(string roomCode) { }
+
+        /// <summary>
+        /// Код комнаты из ссылки-приглашения, с которой открыли игру; отдаётся один раз (потом null),
+        /// чтобы после выхода из комнаты меню не входило в неё снова.
+        /// </summary>
+        public virtual string TakeInviteCode() => null;
 
         /// <summary>Имя игрока из аккаунта площадки; null — площадка имени не даёт, берём введённое в меню.</summary>
         public virtual string AccountName => null;

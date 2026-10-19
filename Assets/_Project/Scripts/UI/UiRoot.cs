@@ -15,6 +15,9 @@ namespace RocketWars.UI
     {
         public const string VolumeKey = "volume";
 
+        /// <summary>Телефон: интерфейс крупнее (экран маленький, а нажимают пальцем).</summary>
+        const float TouchUiScale = 1.4f;
+
         public static UiRoot Instance { get; private set; }
         /// <summary>Курсор нужен интерфейсу (FpsController его не захватывает).</summary>
         public static bool CursorFree { get; private set; } = true;
@@ -26,10 +29,11 @@ namespace RocketWars.UI
         PauseView _pause;
         ResultsView _results;
         OptionsView _options;
+        TouchControls _touch;
         bool _pauseOpen;
         float _pauseOpenedAt;
         bool _resultsDismissed;
-        bool _wasInGame, _wasResultsModal, _playing;
+        bool _wasResultsModal, _playing;
 
         public static float Volume
         {
@@ -45,6 +49,14 @@ namespace RocketWars.UI
         {
             Instance = this;
             AudioListener.volume = Volume;
+            _touch = gameObject.AddComponent<TouchControls>();
+            if (TouchInput.Enabled)
+            {
+                // копия: в редакторе правка самого ассета пережила бы выход из Play
+                var doc = GetComponent<UIDocument>();
+                doc.panelSettings = Instantiate(doc.panelSettings);
+                doc.panelSettings.scale *= TouchUiScale;
+            }
         }
 
         void OnEnable()
@@ -73,10 +85,12 @@ namespace RocketWars.UI
             if (styleSheet != null && !root.styleSheets.Contains(styleSheet))
                 root.styleSheets.Add(styleSheet);
             root.AddToClassList("root");
+            root.EnableInClassList("touch-mode", TouchInput.Enabled); // телефон: свои отступы (RocketWars.uss)
             root.style.unityFontDefinition = GameFonts.Ui;
             root.style.unityTextGenerator = GameFonts.GeneratorFor(Loc.Current);
 
             _hud = new HudView(root);
+            _touch.Build(root);
             _results = new ResultsView(root);
             _pause = new PauseView(root, () => SetPause(false));
             _menu = new MainMenuView(root);
@@ -125,12 +139,13 @@ namespace RocketWars.UI
 
             _menu.SetVisible(!inGame);
             var kb = Keyboard.current;
-            bool tabHeld = kb != null && kb.tabKey.isPressed && inGame;
+            bool tabHeld = (kb != null && kb.tabKey.isPressed || TouchInput.ScoreHeld) && inGame;
             bool resultsModal = matchEnd && !_resultsDismissed;
 
             // на экране итогов HUD (здоровье, счёт, подсказки) не нужен — не просвечивает сквозь пьедестал
             _hud.SetVisible(inGame && !resultsModal);
             _pause.SetVisible(inGame && _pauseOpen);
+            _touch.SetVisible(inGame && !resultsModal && !_pauseOpen && !_options.IsOpen);
             _results.SetMode(resultsModal ? ResultsView.Mode.Final : tabHeld ? ResultsView.Mode.Peek : ResultsView.Mode.Hidden,
                 () => _resultsDismissed = true);
 
@@ -148,7 +163,7 @@ namespace RocketWars.UI
 
         /// <summary>
         /// События площадки: «играет / не играет» и межстраничная реклама — только вне раунда
-        /// (после итогов матча и при выходе в меню), чтобы не мешать сетевой игре.
+        /// (после итогов матча, правила — AdPolicy), чтобы не мешать сетевой игре.
         /// </summary>
         void UpdatePlatform(bool inGame, bool resultsModal)
         {
@@ -161,10 +176,9 @@ namespace RocketWars.UI
                 else platform.GameplayStopped();
             }
 
-            if ((resultsModal && !_wasResultsModal) || (_wasInGame && !inGame))
-                platform.ShowInterstitial(null);
+            if (resultsModal && !_wasResultsModal)
+                AdPolicy.OnMatchFinished();
             _wasResultsModal = resultsModal;
-            _wasInGame = inGame;
         }
 
         void HandleKeys(bool inGame, MatchManager match)

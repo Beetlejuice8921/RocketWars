@@ -14,6 +14,7 @@ namespace RocketWars.UI
         readonly Button _switchTeam;
         readonly Label _switchBlocker;
         readonly Label _room;
+        readonly Button _invite;
 
         public PauseView(VisualElement root, Action resume)
         {
@@ -22,6 +23,8 @@ namespace RocketWars.UI
             panel.style.width = 520;
             Ui.Text(panel, Loc.T("ПАУЗА"), "title", "shadow");
             _room = Ui.Text(panel, "", "label-dim");
+            // Telegram: ссылка-приглашение в чат — друг откроет игру сразу в этой комнате
+            _invite = Ui.Btn(panel, Loc.T("Позвать друга"), () => GamePlatform.Current.Invite(SessionService.Current?.Code));
 
             Ui.Btn(panel, Loc.T("Продолжить"), resume, "btn-primary");
             _start = Ui.Btn(panel, Loc.T("Начать матч"), () =>
@@ -63,6 +66,7 @@ namespace RocketWars.UI
 
             var session = SessionService.Current;
             _room.text = session != null ? Loc.F("Код комнаты: {0}", session.Code) : Loc.T("Комната в локальной сети");
+            Ui.Show(_invite, session != null && GamePlatform.Current.CanInvite);
         }
 
         /// <summary>

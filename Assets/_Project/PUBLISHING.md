@@ -1,7 +1,7 @@
-# Публикация: Steam, Яндекс Игры, VK
+# Публикация: Steam, Яндекс Игры, VK, Telegram
 
-Один проект — три сборки. Меню **RocketWars → Build** (или `BuildAll.CommandLine` из командной строки),
-результат — `Build/<версия>/Steam | Yandex | VK` и `Yandex.zip`, `VK.zip`.
+Один проект — четыре сборки. Меню **RocketWars → Build** (или `BuildAll.CommandLine` из командной строки),
+результат — `Build/<версия>/Steam | Yandex | VK | Telegram` и zip веб-версий.
 
 ## Перед каждой сборкой
 - Менялись сетевые данные (NetworkVariable, RPC, сетевые структуры, префабы, генерация мира)? → поднять `NetProtocol.Version`
@@ -12,8 +12,8 @@
 | Что | Файл |
 |---|---|
 | Отличия площадок | Scripts/Core/Platform/GamePlatform.cs (+ SteamPlatform, WebPlatform) |
-| Вызовы SDK Яндекса и VK | Plugins/WebGL/RWPlatform.jslib |
-| Страницы (подключают SDK) | Assets/WebGLTemplates/RocketWars-Yandex, RocketWars-VK |
+| Вызовы SDK Яндекса, VK, Telegram | Plugins/WebGL/RWPlatform.jslib |
+| Страницы (подключают SDK) | Assets/WebGLTemplates/RocketWars-Yandex, RocketWars-VK, RocketWars-Telegram |
 | Сборка | Editor/BuildAll.cs |
 
 ## Яндекс Игры
@@ -45,6 +45,15 @@
   До модерации реклама тестовая; деньги — после регистрации в кабинете выплат.
 - **Связь с поддержкой обязательна для каталога**: `WebPlatform.VkSupportUrl` → кнопка «Поддержка» в меню.
 - В заявке выбирать только Web (десктоп): управления с телефона нет.
+
+## Telegram Mini App
+- Пошагово (хостинг, BotFather, Adsgram) — `Deploy/Telegram/README.md` в корне репозитория; выкладка — `Deploy/Telegram/deploy.ps1`
+  (Cloudflare Pages).
+- SDK: telegram-web-app.js (шаблон вызывает ready/expand, на телефоне — fullscreen и запрет свайпа), реклама — Adsgram
+  (`WebPlatform.AdsgramInterstitialBlock` / `AdsgramRewardedBlock`), поддержка — `WebPlatform.TelegramSupportUrl`.
+- Настройки — в Telegram CloudStorage (тот же ключ `rw_prefs` и список WebPlatform.CloudPrefs, что у VK).
+- Язык и имя — из initDataUnsafe.user; во время матча включено подтверждение закрытия.
+- На телефонах шаблон предупреждает, что нужны мышь и клавиатура (сенсорного управления нет).
 
 ## Отличия веб-версии от ПК
 - Нет LAN, входа по IP и кнопки «Выйти из игры»; только интернет-комнаты, и только с другими веб-игроками.

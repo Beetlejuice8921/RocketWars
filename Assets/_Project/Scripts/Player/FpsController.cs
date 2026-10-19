@@ -117,7 +117,7 @@ namespace RocketWars.Player
 
             if (IsLocal)
                 UpdateCursor();
-            if (IsLocal && !LookLocked && Cursor.lockState == CursorLockMode.Locked)
+            if (IsLocal && !LookLocked && LookActive)
                 UpdateLook(downed);
             if (!downed && _lookYaw != 0f)
                 MergeLookYaw();
@@ -142,32 +142,27 @@ namespace RocketWars.Player
             float speed = ParachuteOpen ? _parachuteSteerSpeed : _walkSpeed;
             if (IsLocal && !downed && !MovementLocked)
             {
-                var kb = Keyboard.current;
-                if (kb != null)
+                var axis = GameInput.MoveAxis;
+                move = transform.right * axis.x + transform.forward * axis.y;
+
+                if (ParachuteOpen)
+                    speed = _parachuteSteerSpeed;
+                else if (IsCrouching)
+                    speed = _crouchSpeed;
+                else if (GameInput.IsPressed(GameAction.Sprint))
+                    speed = _sprintSpeed;
+
+                if (GameInput.WasPressed(GameAction.Jump))
                 {
-                    float h = (GameInput.IsPressed(GameAction.Right) ? 1 : 0) - (GameInput.IsPressed(GameAction.Left) ? 1 : 0);
-                    float v = (GameInput.IsPressed(GameAction.Forward) ? 1 : 0) - (GameInput.IsPressed(GameAction.Back) ? 1 : 0);
-                    move = Vector3.ClampMagnitude(transform.right * h + transform.forward * v, 1f);
-
                     if (ParachuteOpen)
-                        speed = _parachuteSteerSpeed;
-                    else if (IsCrouching)
-                        speed = _crouchSpeed;
-                    else if (GameInput.IsPressed(GameAction.Sprint))
-                        speed = _sprintSpeed;
-
-                    if (GameInput.WasPressed(GameAction.Jump))
                     {
-                        if (ParachuteOpen)
-                        {
-                            // отстегнуть парашют: дальше свободное падение, до земли он больше не раскроется
-                            ParachuteOpen = false;
-                            _parachuteCut = true;
-                        }
-                        else if (_cc.isGrounded && !IsCrouching)
-                        {
-                            _velocity.y = Mathf.Sqrt(2f * _jumpHeight * -_gravity);
-                        }
+                        // отстегнуть парашют: дальше свободное падение, до земли он больше не раскроется
+                        ParachuteOpen = false;
+                        _parachuteCut = true;
+                    }
+                    else if (_cc.isGrounded && !IsCrouching)
+                    {
+                        _velocity.y = Mathf.Sqrt(2f * _jumpHeight * -_gravity);
                     }
                 }
             }
@@ -283,9 +278,23 @@ namespace RocketWars.Player
             _velocity = new Vector3(0f, velocity.y, 0f);
         }
 
+        /// <summary>
+        /// Управление у игрока (камера, стрельба): курсор захвачен, а на телефоне — интерфейс не открыт
+        /// (захвата курсора там нет, камеру крутит палец).
+        /// </summary>
+        public static bool LookActive => TouchInput.Enabled ? !UI.UiRoot.CursorFree : Cursor.lockState == CursorLockMode.Locked;
+
         /// <summary>Курсор захвачен, пока интерфейсу (меню, пауза, итоги) он не нужен.</summary>
         void UpdateCursor()
         {
+            if (TouchInput.Enabled)
+            {
+                // на телефоне курсора нет — не захватываем и не ловим «потерю захвата» (это открыло бы паузу)
+                if (Cursor.lockState != CursorLockMode.None)
+                    Cursor.lockState = CursorLockMode.None;
+                _cursorWasLocked = false;
+                return;
+            }
             bool free = UI.UiRoot.CursorFree || LookLocked;
             var wanted = free ? CursorLockMode.None : CursorLockMode.Locked;
             if (Cursor.lockState != wanted)
@@ -312,9 +321,10 @@ namespace RocketWars.Player
         void UpdateLook(bool downed)
         {
             var mouse = Mouse.current;
-            if (mouse == null)
+            Vector2 raw = TouchInput.Enabled ? TouchInput.LookDelta : mouse != null ? mouse.delta.ReadValue() : Vector2.zero;
+            if (raw == Vector2.zero)
                 return;
-            Vector2 delta = mouse.delta.ReadValue() * (mouseSensitivity * GameInput.Sensitivity * LookSensitivityScale);
+            Vector2 delta = raw * (mouseSensitivity * GameInput.Sensitivity * LookSensitivityScale);
             if (downed)
                 _lookYaw = Mathf.Repeat(_lookYaw + delta.x + 180f, 360f) - 180f;
             else
@@ -329,11 +339,8 @@ namespace RocketWars.Player
         /// </summary>
         Vector3 CrawlInput()
         {
-            var kb = Keyboard.current;
-            if (kb == null)
-                return Vector3.zero;
-            float h = (GameInput.IsPressed(GameAction.Right) ? 1 : 0) - (GameInput.IsPressed(GameAction.Left) ? 1 : 0);
-            float v = (GameInput.IsPressed(GameAction.Forward) ? 1 : 0) - (GameInput.IsPressed(GameAction.Back) ? 1 : 0);
+            var axis = GameInput.MoveAxis;
+            float h = axis.x, v = axis.y;
             if (h == 0f && v == 0f)
                 return Vector3.zero;
 

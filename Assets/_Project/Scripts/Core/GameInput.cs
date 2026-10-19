@@ -71,10 +71,21 @@ namespace RocketWars.Core
         }
 
         public static bool IsPressed(GameAction action) =>
-            Control(Binds[(int)action]) is ButtonControl c && c.isPressed || SimulatedHeld(action);
+            Control(Binds[(int)action]) is ButtonControl c && c.isPressed || TouchInput.IsHeld(action) || SimulatedHeld(action);
 
         public static bool WasPressed(GameAction action) =>
-            Control(Binds[(int)action]) is ButtonControl c && c.wasPressedThisFrame || SimulatedDown(action);
+            Control(Binds[(int)action]) is ButtonControl c && c.wasPressedThisFrame || TouchInput.WasDown(action) || SimulatedDown(action);
+
+        /// <summary>Движение: x — вправо, y — вперёд, длина до 1. Клавиши дают 0/1, экранный джойстик — плавно.</summary>
+        public static Vector2 MoveAxis
+        {
+            get
+            {
+                float h = (IsPressed(GameAction.Right) ? 1 : 0) - (IsPressed(GameAction.Left) ? 1 : 0);
+                float v = (IsPressed(GameAction.Forward) ? 1 : 0) - (IsPressed(GameAction.Back) ? 1 : 0);
+                return Vector2.ClampMagnitude(new Vector2(h, v) + TouchInput.Move, 1f);
+            }
+        }
 
 #if UNITY_EDITOR
         // Редактор: «зажатые» из кода действия — запись ролика и проверки, когда окно Unity не в фокусе (ввод не доходит)
@@ -233,15 +244,32 @@ namespace RocketWars.Core
             };
         }
 
-        /// <summary>Подставить в текст текущие клавиши вместо {use}, {jump}, {trick}, {fire}, {aim}, ….</summary>
+        /// <summary>
+        /// Подставить в текст текущие клавиши вместо {use}, {jump}, {trick}, {fire}, {aim}, …;
+        /// на телефоне — название экранной кнопки: «[ДЕЙСТВИЕ] - взять».
+        /// </summary>
         public static string ReplaceTokens(string s)
         {
             if (s == null || s.IndexOf('{') < 0)
                 return s;
             for (int i = 0; i < Tokens.Length; i++)
                 if (s.Contains(Tokens[i]))
-                    s = s.Replace(Tokens[i], CodeName(Binds[i]));
+                    s = s.Replace(Tokens[i], TouchInput.Enabled && TouchLabel((GameAction)i) is string label
+                        ? "[" + Loc.T(label) + "]"
+                        : CodeName(Binds[i]));
             return s;
         }
+
+        /// <summary>Надпись экранной кнопки действия (ключ Loc); null — отдельной кнопки нет (ходьба — джойстиком).</summary>
+        public static string TouchLabel(GameAction action) => action switch
+        {
+            GameAction.Fire => "ОГОНЬ",
+            GameAction.Jump => "ПРЫЖОК",
+            GameAction.Crouch => "ПРИСЕСТЬ",
+            GameAction.Aim => "ПРИЦЕЛ",
+            GameAction.Use => "ДЕЙСТВИЕ",
+            GameAction.Trick => "ТРЮК",
+            _ => null,
+        };
     }
 }

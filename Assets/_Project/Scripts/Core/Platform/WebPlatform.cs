@@ -6,7 +6,7 @@ using UnityEngine;
 namespace RocketWars.Core
 {
     /// <summary>
-    /// Браузерная сборка (Яндекс Игры, VK). SDK площадки вызывается через Plugins/WebGL/RWPlatform.jslib,
+    /// Браузерная сборка (Яндекс Игры, VK, Telegram Mini App). SDK площадки вызывается через Plugins/WebGL/RWPlatform.jslib,
     /// ответы приходят на объект RWPlatformBridge. В редакторе и без SDK — заглушки базового класса.
     /// </summary>
     public class WebPlatform : GamePlatform
@@ -17,9 +17,26 @@ namespace RocketWars.Core
         /// </summary>
         public const string VkSupportUrl = "";
 
+        /// <summary>Связь с поддержкой в Telegram (канал или чат игры, https://t.me/...). Пусто — кнопки «Поддержка» нет.</summary>
+        public const string TelegramSupportUrl = "";
+
+        /// <summary>Ссылка на Mini App (@BotFather → /newapp); приглашение добавляет к ней ?startapp=room_&lt;код&gt;.</summary>
+        public const string TelegramAppUrl = "https://t.me/RocketWarsGameBot/play";
+
+        /// <summary>Приставка параметра startapp у приглашения в комнату (остальные значения — на будущее, например рефералы).</summary>
+        const string InviteStartPrefix = "room_";
+
         /// <summary>
-        /// Ключи PlayerPrefs, которые VK хранит у себя (VKWebAppStorage): хостинг VK меняет адрес игры при каждой выкладке,
-        /// и сохранения браузера пропадают. Ключи — из Loc, UiRoot, GameInput, NetworkBootstrap.
+        /// Блоки рекламы Adsgram (partner.adsgram.ai → блок → blockId). Пусто — этот вид рекламы в Telegram не показывается,
+        /// а сборка Telegram предупреждает (Editor/BuildAll).
+        /// </summary>
+        public const string AdsgramInterstitialBlock = "int-54871";
+        public const string AdsgramRewardedBlock = "54872";
+
+        /// <summary>
+        /// Ключи PlayerPrefs, которые площадка хранит у себя (VKWebAppStorage, Telegram CloudStorage): хостинг VK меняет адрес
+        /// игры при каждой выкладке, а WebView Telegram может очистить данные сайта, — сохранения браузера пропадают.
+        /// Ключи — из Loc, UiRoot, GameInput, NetworkBootstrap, AdPolicy.
         /// </summary>
         static readonly (string key, char type)[] CloudPrefs = BuildCloudPrefs();
 
@@ -27,7 +44,7 @@ namespace RocketWars.Core
 
         readonly string _id;
         string _cloudSaved;
-        string _accountName;
+        string _accountName, _inviteCode;
         bool _initialized, _readyPending;
         Action<bool> _adClosed;
 
@@ -35,7 +52,8 @@ namespace RocketWars.Core
         {
             _id = id;
             Bridge.Create(this);
-            RW_Init(id);
+            var config = new InitConfig { adInterstitial = AdsgramInterstitialBlock, adRewarded = AdsgramRewardedBlock };
+            RW_Init(id, JsonUtility.ToJson(config));
         }
 
         public override string Id => _id;
@@ -46,9 +64,49 @@ namespace RocketWars.Core
 
         public override bool IsInitialized => _initialized;
 
-        public override string SupportUrl => _id == "vk" && !string.IsNullOrEmpty(VkSupportUrl) ? VkSupportUrl : null;
+        public override string SupportUrl => _id switch
+        {
+            "vk" when !string.IsNullOrEmpty(VkSupportUrl) => VkSupportUrl,
+            "telegram" when !string.IsNullOrEmpty(TelegramSupportUrl) => TelegramSupportUrl,
+            _ => null,
+        };
 
-        bool UsesCloudPrefs => _id == "vk";
+        // ссылки t.me внутри Telegram открываются его же средствами (openTelegramLink), а не новой вкладкой
+        public override void OpenSupport()
+        {
+            if (!string.IsNullOrEmpty(SupportUrl))
+                RW_OpenLink(SupportUrl);
+        }
+
+        public override bool CanInvite => _id == "telegram" && !string.IsNullOrEmpty(TelegramAppUrl);
+
+        public override void Invite(string roomCode)
+        {
+            if (!CanInvite || string.IsNullOrEmpty(roomCode))
+                return;
+            RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
+        }
+
+        public override string TakeInviteCode()
+        {
+            string code = _inviteCode;
+            _inviteCode = null;
+            return code;
+        }
+
+        /// <summary>startapp=room_ABC123 → ABC123 (startapp допускает только A–Z, a–z, 0–9, _ и -).</summary>
+        static string ParseInviteCode(string start)
+        {
+            if (string.IsNullOrEmpty(start) || !start.StartsWith(InviteStartPrefix, StringComparison.Ordinal))
+                return null;
+            string code = start.Substring(InviteStartPrefix.Length).ToUpperInvariant();
+            foreach (char c in code)
+                if (!(c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'))
+                    return null;
+            return code.Length > 0 ? code : null;
+        }
+
+        bool UsesCloudPrefs => _id == "vk" || _id == "telegram";
 
         public override void GameReady()
         {
@@ -80,8 +138,9 @@ namespace RocketWars.Core
         {
             var data = JsonUtility.FromJson<InitData>(json);
             _accountName = string.IsNullOrWhiteSpace(data.name) ? null : data.name.Trim();
+            _inviteCode = ParseInviteCode(data.start);
             _initialized = true;
-            Debug.Log($"[RocketWars] platform {_id}: lang '{data.lang}', name '{_accountName}', cloud prefs {data.prefs?.Length ?? 0} chars");
+            Debug.Log($"[RocketWars] platform {_id}: lang '{data.lang}', name '{_accountName}', start '{data.start}', cloud prefs {data.prefs?.Length ?? 0} chars");
             if (UsesCloudPrefs)
             {
                 if (!string.IsNullOrEmpty(data.prefs))
@@ -161,7 +220,7 @@ namespace RocketWars.Core
         {
             var list = new System.Collections.Generic.List<(string, char)>
             {
-                ("language", 'i'), ("volume", 'f'), ("mouseSensitivity", 'f'), ("playerName", 's'),
+                ("language", 'i'), ("volume", 'f'), ("mouseSensitivity", 'f'), ("playerName", 's'), (AdPolicy.MatchesKey, 'i'),
             };
             foreach (var action in Enum.GetNames(typeof(GameAction)))
                 list.Add(("bind." + action, 'i'));
@@ -204,12 +263,21 @@ namespace RocketWars.Core
             }
         }
 
+        /// <summary>Настройки площадки для jslib (RW_Init).</summary>
+        [Serializable]
+        struct InitConfig
+        {
+            public string adInterstitial;
+            public string adRewarded;
+        }
+
         [Serializable]
         struct InitData
         {
             public string lang;
             public string name;
             public string prefs;
+            public string start;
         }
 
         [Serializable]
@@ -268,18 +336,22 @@ namespace RocketWars.Core
         }
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-        [DllImport("__Internal")] static extern void RW_Init(string platform);
+        [DllImport("__Internal")] static extern void RW_Init(string platform, string config);
         [DllImport("__Internal")] static extern void RW_GameReady();
         [DllImport("__Internal")] static extern void RW_Gameplay(int started);
         [DllImport("__Internal")] static extern void RW_ShowAd(int rewarded);
         [DllImport("__Internal")] static extern void RW_SavePrefs(string json);
+        [DllImport("__Internal")] static extern void RW_OpenLink(string url);
+        [DllImport("__Internal")] static extern void RW_Share(string url, string text);
 #else
         // редактор: SDK нет — готовы сразу (без события: конструктор ещё не вернул Current), реклама сразу закрывается
-        void RW_Init(string platform) => _initialized = true;
+        void RW_Init(string platform, string config) => _initialized = true;
         static void RW_GameReady() { }
         static void RW_Gameplay(int started) { }
         void RW_ShowAd(int rewarded) => OnAdClosed(false);
         static void RW_SavePrefs(string json) { }
+        static void RW_OpenLink(string url) => Application.OpenURL(url);
+        static void RW_Share(string url, string text) => Application.OpenURL("https://t.me/share/url?url=" + Uri.EscapeDataString(url) + "&text=" + Uri.EscapeDataString(text));
 #endif
     }
 }

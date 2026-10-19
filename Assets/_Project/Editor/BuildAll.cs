@@ -11,19 +11,19 @@ using UnityEngine;
 namespace RocketWars.EditorTools
 {
     /// <summary>
-    /// Сборка всех версий из одного проекта: Steam (Windows), Яндекс Игры и VK (WebGL).
+    /// Сборка всех версий из одного проекта: Steam (Windows), Яндекс Игры, VK и Telegram Mini App (WebGL).
     /// Площадку выбирает символ компиляции (GamePlatform), остальной код общий.
-    /// Результат: &lt;папка проекта&gt;/../Build/&lt;версия&gt;/Steam | Yandex | VK, веб-версии ещё и в zip для загрузки.
+    /// Результат: &lt;папка проекта&gt;/../Build/&lt;версия&gt;/Steam | Yandex | VK | Telegram, веб-версии ещё и в zip для загрузки.
     ///
     /// Из командной строки (редактор с этим проектом должен быть закрыт):
     ///   Unity.exe -batchmode -quit -projectPath &lt;проект&gt; -executeMethod RocketWars.EditorTools.BuildAll.CommandLine
-    ///     [-targets steam,yandex,vk] [-bumpVersion] -logFile build.log
+    ///     [-targets steam,yandex,vk,telegram] [-bumpVersion] -logFile build.log
     /// </summary>
     public static class BuildAll
     {
-        enum Target { Steam, Yandex, VK }
+        enum Target { Steam, Yandex, VK, Telegram }
 
-        static readonly Target[] AllTargets = { Target.Steam, Target.Yandex, Target.VK };
+        static readonly Target[] AllTargets = { Target.Steam, Target.Yandex, Target.VK, Target.Telegram };
 
         [MenuItem("RocketWars/Build/All Platforms", priority = 100)]
         static void MenuAll() => RunInteractive(AllTargets);
@@ -36,6 +36,9 @@ namespace RocketWars.EditorTools
 
         [MenuItem("RocketWars/Build/VK (Web)", priority = 113)]
         static void MenuVk() => RunInteractive(new[] { Target.VK });
+
+        [MenuItem("RocketWars/Build/Telegram Mini App (Web)", priority = 114)]
+        static void MenuTelegram() => RunInteractive(new[] { Target.Telegram });
 
         [MenuItem("RocketWars/Build/Bump Version", priority = 130)]
         static void MenuBump()
@@ -166,6 +169,9 @@ namespace RocketWars.EditorTools
             message = $"OK, {size} → {folder}";
             if (target == Target.VK && string.IsNullOrEmpty(RocketWars.Core.WebPlatform.VkSupportUrl))
                 message += "\n  ВНИМАНИЕ: не задан WebPlatform.VkSupportUrl — без связи с поддержкой VK не пустит игру в каталог";
+            if (target == Target.Telegram && (string.IsNullOrEmpty(RocketWars.Core.WebPlatform.AdsgramInterstitialBlock) ||
+                                              string.IsNullOrEmpty(RocketWars.Core.WebPlatform.AdsgramRewardedBlock)))
+                message += "\n  ВНИМАНИЕ: не заданы блоки Adsgram (WebPlatform.Adsgram*Block) — реклама в Telegram не показывается";
             return true;
         }
 
@@ -176,7 +182,7 @@ namespace RocketWars.EditorTools
         /// </summary>
         static void ApplyWebSettings(Target target)
         {
-            PlayerSettings.WebGL.template = target == Target.Yandex ? "PROJECT:RocketWars-Yandex" : "PROJECT:RocketWars-VK";
+            PlayerSettings.WebGL.template = "PROJECT:RocketWars-" + target; // Assets/WebGLTemplates/RocketWars-Yandex | VK | Telegram
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.nameFilesAsHashes = true; // новые имена файлов при обновлении — без старого кэша у игроков
@@ -190,7 +196,8 @@ namespace RocketWars.EditorTools
         {
             Target.Steam => "PLATFORM_STEAM",
             Target.Yandex => "PLATFORM_YANDEX",
-            _ => "PLATFORM_VK",
+            Target.VK => "PLATFORM_VK",
+            _ => "PLATFORM_TELEGRAM",
         };
 
         static void BumpVersion()

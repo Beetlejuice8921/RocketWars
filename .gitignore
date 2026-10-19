@@ -47,3 +47,6 @@ crashlytics-build.properties
 # ОС
 .DS_Store
 Thumbs.db
+
+# Cloudflare wrangler local cache (account info)
+.wrangler/
