@@ -313,7 +313,13 @@ namespace RocketWars.Player
                 _phase += horizontal.magnitude / StrideLength * 2f * Mathf.PI;
                 // шаг на каждом полуцикле
                 if (Mathf.Floor(prev / Mathf.PI) != Mathf.Floor(_phase / Mathf.PI))
-                    Sfx.PlayAt(Sfx.Step, transform.position, _controller != null && _controller.IsLocal ? 0.35f : 0.5f, 25f, Random.Range(0.85f, 1.15f));
+                {
+                    // бег — быстрее обычной ходьбы (5 м/с), спринт 7.5 м/с
+                    bool running = speed > 6.2f;
+                    Sfx.PlayAt(running ? Sfx.RunStep : Sfx.Step, transform.position,
+                        _controller != null && _controller.IsLocal ? 0.35f : 0.5f, running ? 20f : 15f,
+                        Random.Range(0.94f, 1.06f), Sfx.FootstepRolloff);
+                }
             }
 
             float s = Mathf.Sin(_phase) * _swing;
@@ -385,7 +391,7 @@ namespace RocketWars.Player
                 float prev = _phase;
                 _phase += distance / CrawlStroke * 2f * Mathf.PI;
                 if (Mathf.Floor(prev / Mathf.PI) != Mathf.Floor(_phase / Mathf.PI))
-                    Sfx.PlayAt(Sfx.Step, transform.position, 0.2f, 15f, Random.Range(0.6f, 0.75f));
+                    Sfx.PlayAt(Sfx.Step, transform.position, 0.2f, 15f, Random.Range(0.6f, 0.75f), Sfx.FootstepRolloff);
             }
             float s = Mathf.Sin(_phase) * _swing;
             _armL.localRotation = Quaternion.Euler(0f, 0f, -70f - 45f * s);

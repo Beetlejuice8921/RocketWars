@@ -41,8 +41,40 @@ namespace RocketWars.Core
 
         // ---------- персонаж ----------
 
-        /// <summary>Шаг (3D, со случайной высотой тона).</summary>
-        public static AudioClip Step => Get(nameof(Step));
+        /// <summary>Шаг шагом — случайный из Footsteps/Foot_Step_grass_01..16 (3D, до 15 м).</summary>
+        public static AudioClip Step => Pick(StepClips, "Footsteps/Foot_Step_grass_");
+        /// <summary>Шаг бегом — случайный из Footsteps/Foot_Run_grass_01..16 (3D, до 20 м).</summary>
+        public static AudioClip RunStep => Pick(RunClips, "Footsteps/Foot_Run_grass_");
+
+        const int FootstepVariants = 16;
+        static readonly AudioClip[] StepClips = new AudioClip[FootstepVariants];
+        static readonly AudioClip[] RunClips = new AudioClip[FootstepVariants];
+        static int _lastPick = -1;
+
+        /// <summary>Случайный вариант из набора <paramref name="prefix"/>01..16, не повторяя предыдущий.</summary>
+        static AudioClip Pick(AudioClip[] clips, string prefix)
+        {
+            int i = Random.Range(0, FootstepVariants - 1);
+            if (i >= _lastPick && _lastPick >= 0)
+                i++;
+            _lastPick = i;
+            if (clips[i] == null)
+                clips[i] = Get(prefix + (i + 1).ToString("00"));
+            return clips[i];
+        }
+
+        /// <summary>
+        /// Затухание шагов: громко вплотную, дальше ~1/d (как Logarithmic Rolloff в инспекторе), к maxDistance — тишина.
+        /// X нормирован на maxDistance.
+        /// </summary>
+        public static readonly AnimationCurve FootstepRolloff = new AnimationCurve(
+            new Keyframe(0f, 1f),
+            new Keyframe(0.067f, 1f),
+            new Keyframe(0.11f, 0.5f),
+            new Keyframe(0.18f, 0.25f),
+            new Keyframe(0.31f, 0.12f),
+            new Keyframe(0.56f, 0.055f),
+            new Keyframe(1f, 0f));
         /// <summary>Получил урон (3D).</summary>
         public static AudioClip Hurt => Get(nameof(Hurt));
         /// <summary>Лёг (3D).</summary>
@@ -129,11 +161,17 @@ namespace RocketWars.Core
         }
 
         /// <summary>Разовый 3D-звук. Источник принадлежит пулю — не храните ссылку на него.</summary>
-        public static AudioSource PlayAt(AudioClip clip, Vector3 position, float volume = 1f, float maxDistance = 150f, float pitch = 1f)
+        public static AudioSource PlayAt(AudioClip clip, Vector3 position, float volume = 1f, float maxDistance = 150f, float pitch = 1f,
+            AnimationCurve rolloff = null)
         {
             if (clip == null)
                 return null;
             var src = Configure(TakeVoice(), maxDistance);
+            if (rolloff != null)
+            {
+                src.rolloffMode = AudioRolloffMode.Custom;
+                src.SetCustomCurve(AudioSourceCurveType.CustomRolloff, rolloff);
+            }
             src.transform.position = position;
             src.clip = clip;
             src.volume = volume;
