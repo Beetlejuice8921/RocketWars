@@ -15,7 +15,7 @@ namespace RocketWars.Core
         /// Связь с поддержкой (сообщество VK) — обязательна для каталога VK. Пусто — кнопки «Поддержка» нет,
         /// а сборка VK предупреждает (Editor/BuildAll).
         /// </summary>
-        public const string VkSupportUrl = "";
+        public const string VkSupportUrl = "https://vk.ru/club242407320";
 
         /// <summary>Связь с поддержкой в Telegram (канал или чат игры, https://t.me/...). Пусто — кнопки «Поддержка» нет.</summary>
         public const string TelegramSupportUrl = "";

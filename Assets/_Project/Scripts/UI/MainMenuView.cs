@@ -9,7 +9,7 @@ namespace RocketWars.UI
 {
     /// <summary>
     /// Главное меню: в центре — имя, создать комнату (LAN / Internet), поиск комнаты (LAN + Internet, вход по IP или коду);
-    /// слева — «Опции» (язык, громкость, мышь, клавиши) и «Выйти из игры».
+    /// всё — колонкой у левого края; под панелью — «Опции» (язык, громкость, мышь, клавиши) и «Выйти из игры».
     /// </summary>
     public class MainMenuView
     {
@@ -40,17 +40,20 @@ namespace RocketWars.UI
         public MainMenuView(VisualElement root)
         {
             _screen = Ui.El(root, "layer", "menu-screen");
-            var side = Ui.El(_screen, "menu-side");
+            // название — крупно, по центру вверху экрана
+            var title = Ui.Text(_screen, "ROCKET WARS", "menu-title", "shadow");
+
+            // колонка у левого края: панель, под ней — «Опции» / «Поддержка» / «Выйти из игры» друг под другом
+            var column = Ui.El(_screen, "menu-column");
+            var panel = Ui.El(column, "panel", "menu-panel");
+            Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
+
+            var side = Ui.El(column, "menu-side");
             Ui.Btn(side, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions(), "menu-side-btn");
             if (GamePlatform.Current.SupportUrl != null)
                 Ui.Btn(side, Loc.T("Поддержка"), () => GamePlatform.Current.OpenSupport(), "menu-side-btn");
             if (GamePlatform.Current.CanQuit)
                 Ui.Btn(side, Loc.T("Выйти из игры"), () => GamePlatform.Current.Quit(), "btn-danger", "menu-side-btn");
-
-            // название — над панелью, крупно
-            var title = Ui.Text(_screen, "ROCKET WARS", "menu-title", "shadow");
-            var panel = Ui.El(_screen, "panel", "menu-panel");
-            Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
 
             var nameRow = Ui.El(panel, "row");
             Ui.Text(nameRow, Loc.T("Имя"), "label-dim");
@@ -110,8 +113,11 @@ namespace RocketWars.UI
                 _status.text = NetworkBootstrap.LastMessage ?? "";
                 if (Net != null)
                     _name.SetValueWithoutNotify(Net.PlayerName);
-                var cam = LocalPlayerRig.GetCamera();
-                LocalPlayerRig.ShowOverview(cam);
+                MenuDiorama.Show(LocalPlayerRig.GetCamera());
+            }
+            else
+            {
+                MenuDiorama.Hide();
             }
         }
 

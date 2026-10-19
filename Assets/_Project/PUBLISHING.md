@@ -35,6 +35,8 @@
 - **Хостинг VK** (бесплатно, CDN): `Deploy/VK/deploy.ps1` берёт последнюю `Build/<версия>/VK` и выкладывает через
   vk-miniapps-deploy (Node.js). Один раз вписать `app_id` в `Deploy/VK/vk-hosting-config.json`. Адреса в «Размещении»
   библиотека обновит сама. Лимиты: 24 выкладки в сутки, архив до 300 МБ. Можно и свой HTTPS-хостинг без X-Frame-Options.
+  Запуск: `powershell -ExecutionPolicy Bypass -File Deploy/VK/deploy.ps1` (или `-Version 1.0.3`). При первом запуске
+  утилита попросит войти в VK; токен положить в переменную окружения `MINI_APPS_ACCESS_TOKEN`, не в репозиторий.
 - Адрес игры на хостинге VK меняется с каждой выкладкой → PlayerPrefs браузера теряются. Поэтому язык, громкость,
   чувствительность, клавиши и имя хранятся ещё и в VKWebAppStorage (ключ `rw_prefs`, WebPlatform.CloudPrefs);
   новый ключ PlayerPrefs, который должен переживать обновления, — добавить туда.

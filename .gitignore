@@ -50,3 +50,6 @@ Thumbs.db
 
 # Cloudflare wrangler local cache (account info)
 .wrangler/
+
+# выкладка VK: копия сборки перед загрузкой
+/Deploy/VK/build/

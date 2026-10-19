@@ -245,37 +245,43 @@
 /* ---------- главное меню ---------- */
 
 .menu-screen {
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    padding-left: 64px;
+    padding-bottom: 96px; /* колонка чуть выше центра экрана */
     background-color: rgba(10, 14, 20, 0.35);
 }
 
-.menu-panel {
+/* панель и кнопки под ней — одной колонкой у левого края */
+.menu-column {
     width: 760px;
 }
 
-/* название игры над панелью меню */
+.menu-panel {
+    background-color: rgba(28, 32, 40, 0.6);
+}
+
+/* название игры — по центру вверху экрана */
 .menu-title {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 40px;
     font-size: 64px;
     -unity-text-align: middle-center;
     text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.6);
-    margin-bottom: 28px;
 }
 
-/* левая колонка меню: «Опции» и «Выйти из игры» */
+/* под панелью меню, друг под другом: «Опции», «Поддержка», «Выйти из игры» */
 .menu-side {
-    position: absolute;
-    left: 64px;
-    top: 0;
-    bottom: 0;
     width: 340px;
-    justify-content: center;
+    margin-top: 6px;
 }
 
 .menu-side-btn {
     height: 56px;
     font-size: 14px;
-    margin: 6px 0;
+    margin: 6px 0 0 0;
 }
 
 /* ---------- опции ---------- */
