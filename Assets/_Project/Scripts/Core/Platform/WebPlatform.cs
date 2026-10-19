@@ -84,7 +84,7 @@ namespace RocketWars.Core
         {
             if (!CanInvite || string.IsNullOrEmpty(roomCode))
                 return;
-            RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
+            RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
         }
 
         public override string TakeInviteCode()

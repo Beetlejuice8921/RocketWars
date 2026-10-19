@@ -17,9 +17,9 @@
         if (tg.isVersionAtLeast("6.1")) { tg.setHeaderColor("#000000"); tg.setBackgroundColor("#000000"); }
         // свайп вниз по игре не должен сворачивать Telegram (Bot API 7.7)
         if (tg.isVersionAtLeast("7.7")) tg.disableVerticalSwipes();
-        // на телефоне — во весь экран (Bot API 8.0)
-        var mobile = tg.platform === "android" || tg.platform === "ios";
-        if (mobile && tg.isVersionAtLeast("8.0")) tg.requestFullscreen();
+        // во весь экран (Bot API 8.0): на телефоне, и на десктопе — иначе Telegram открывает узкое вертикальное окно.
+        // Не вышло (web-версия Telegram без жеста игрока) — событие fullscreenFailed, игра просто остаётся в окне
+        if (tg.isVersionAtLeast("8.0")) tg.requestFullscreen();
       })();
     </script>
     <link rel="icon" type="image/png" href="favicon.png">
