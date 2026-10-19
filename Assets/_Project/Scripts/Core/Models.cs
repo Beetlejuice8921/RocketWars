@@ -155,7 +155,11 @@ namespace RocketWars.Core
             return b > 0.6f ? CamoKhaki : CamoOlive;
         }
 
-        public static (Mesh mesh, Material[] materials) CharacterBody(int team)
+        /// <summary>Шея: где голова крепится к телу (низ головы).</summary>
+        public const float NeckY = 1.55f;
+
+        /// <summary>Тело солдата с головой; withHead = false — без неё, голову тогда даёт CharacterHead (сцена меню).</summary>
+        public static (Mesh mesh, Material[] materials) CharacterBody(int team, bool withHead = true)
         {
             var teamColor = RuntimeMaterials.TeamColor(team);
             var m = new BoxModel()
@@ -169,16 +173,30 @@ namespace RocketWars.Core
                 .Box(new Vector3(0, 0.89f, 0.19f), new Vector3(0.1f, 0.07f, 0.02f), Buckle)
                 .Box(new Vector3(-0.2f, 0.92f, 0.2f), new Vector3(0.12f, 0.13f, 0.06f), HelmetOlive)
                 .Box(new Vector3(0.2f, 0.92f, 0.2f), new Vector3(0.12f, 0.13f, 0.06f), HelmetOlive)
-                .Box(new Vector3(0, 0.95f, -0.2f), new Vector3(0.22f, 0.15f, 0.07f), HelmetOlive)
-                // голова и лицо
-                .Box(new Vector3(0, 1.75f, 0), new Vector3(0.4f, 0.4f, 0.4f), Skin)
-                .Box(new Vector3(-0.1f, 1.78f, 0.205f), new Vector3(0.08f, 0.06f, 0.02f), Dark)
-                .Box(new Vector3(0.1f, 1.78f, 0.205f), new Vector3(0.08f, 0.06f, 0.02f), Dark)
-                // подбородочный ремень каски
-                .Box(new Vector3(-0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), Leather)
-                .Box(new Vector3(0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), Leather)
-                .Box(new Vector3(0f, 1.555f, -0.06f), new Vector3(0.42f, 0.02f, 0.035f), Leather);
-            return m.Build($"char_body_{team}");
+                .Box(new Vector3(0, 0.95f, -0.2f), new Vector3(0.22f, 0.15f, 0.07f), HelmetOlive);
+            if (withHead)
+                AddHead(m, Vector3.zero);
+            return m.Build(withHead ? $"char_body_{team}" : $"char_torso_{team}");
+        }
+
+        /// <summary>Отдельная голова: pivot в шее (NeckY), в остальном как на CharacterBody.</summary>
+        public static (Mesh mesh, Material[] materials) CharacterHead()
+        {
+            var m = new BoxModel();
+            AddHead(m, new Vector3(0f, -NeckY, 0f));
+            return m.Build("char_head");
+        }
+
+        static void AddHead(BoxModel m, Vector3 o)
+        {
+            // голова и лицо
+            m.Box(o + new Vector3(0, 1.75f, 0), new Vector3(0.4f, 0.4f, 0.4f), Skin)
+             .Box(o + new Vector3(-0.1f, 1.78f, 0.205f), new Vector3(0.08f, 0.06f, 0.02f), Dark)
+             .Box(o + new Vector3(0.1f, 1.78f, 0.205f), new Vector3(0.08f, 0.06f, 0.02f), Dark)
+             // подбородочный ремень каски
+             .Box(o + new Vector3(-0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), Leather)
+             .Box(o + new Vector3(0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), Leather)
+             .Box(o + new Vector3(0f, 1.555f, -0.06f), new Vector3(0.42f, 0.02f, 0.035f), Leather);
         }
 
         /// <summary>

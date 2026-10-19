@@ -6,12 +6,13 @@ namespace RocketWars.UI
     /// <summary>
     /// Солдат на переднем плане сцены меню: сидит на траве, ноги вытянуты вперёд, держит раскрытую книгу у груди
     /// и время от времени перелистывает страницу. Бой за спиной его не касается.
+    /// Рядом, прислонившись головой к его боку, валяется красный солдат (MenuLounger).
     /// </summary>
     public class MenuReader
     {
         const int Team = 1;
         /// <summary>Чуть отвёрнут от камеры к середине экрана (градусы).</summary>
-        const float Turn = -22f;
+        public const float Turn = -22f;
         const float PageTurnTime = 0.7f;
         const float PageIntervalMin = 4f, PageIntervalMax = 7f;
         /// <summary>Разворот книги: половинки раскрыты на ±HalfAngle от плоскости, страница листается между ними.</summary>
@@ -34,6 +35,7 @@ namespace RocketWars.UI
 
         readonly Transform _root, _body, _helmet, _page;
         readonly Transform[] _flowers = new Transform[Flowers.Length];
+        readonly MenuLounger _lounger;
         float _pageTimer = 2f, _pageT = -1f, _time;
 
         public MenuReader(Transform parent)
@@ -76,10 +78,12 @@ namespace RocketWars.UI
                 _flowers[i] = BoxModel.Spawn(mesh, mats, _root, pos, "Flower").transform;
                 _flowers[i].localRotation = Quaternion.Euler(0f, i * 37f, 0f);
             }
+
+            _lounger = new MenuLounger(_root);
         }
 
         /// <summary>Воксельный цветок: стебель с листиком, четыре лепестка крестом вокруг жёлтой серединки (pivot — у земли).</summary>
-        static (Mesh mesh, Material[] materials) Flower(float height, Color petals)
+        public static (Mesh mesh, Material[] materials) Flower(float height, Color petals)
         {
             const float p = 0.06f; // лепесток
             Vector3 top = new Vector3(0f, height, 0f);
@@ -125,6 +129,7 @@ namespace RocketWars.UI
             _time += dt;
             // дышит
             _body.localPosition = new Vector3(0f, -0.7f + Mathf.Sin(_time * 1.6f) * 0.008f, 0f);
+            _lounger.Update(dt);
             // цветы покачиваются на ветерке
             for (int i = 0; i < _flowers.Length; i++)
                 _flowers[i].localRotation = Quaternion.Euler(Mathf.Sin(_time * 1.3f + i * 2.1f) * 6f, i * 37f, Mathf.Cos(_time * 1.1f + i) * 5f);
