@@ -36,6 +36,15 @@ namespace RocketWars.Launcher
 
         const byte FlagXRunning = 1, FlagXSet = 2, FlagYRunning = 4, FlagYSet = 8;
 
+        /// <summary>
+        /// Насколько в прошлое сервер принимает время нажатия клиента: линия останавливается там, где её видел нажавший
+        /// (пинг через Relay), но не раньше — иначе можно было бы «выбирать» точку задним числом.
+        /// </summary>
+        const double MaxPressRewind = 0.75;
+
+        /// <summary>Сколько клиент ждёт подтверждения своего нажатия, прежде чем вернуться к состоянию сервера (нажатие отклонено).</summary>
+        const float PredictionTimeout = 1.5f;
+
         public RocketSilo Silo { get; private set; }
         public bool XRunning { get; private set; }
         public bool XSet { get; private set; }
@@ -48,8 +57,16 @@ namespace RocketWars.Launcher
         float _xPhase0, _yPhase0;
         double _stamp, _lastPress;
 
-        float XPhase => _xPhase0 + (XRunning ? LineSpeed * (float)(NetClock.Now - _stamp) : 0f);
-        float YPhase => _yPhase0 + (YRunning ? LineSpeed * (float)(NetClock.Now - _stamp) : 0f);
+        // клиент: своё нажатие X/Y показано сразу, а синхронизация с сервера не перетирает его, пока не придёт
+        // состояние с этим нажатием (LastPress ≥ _predictedPress) или не выйдет время
+        double _predictedPress;
+        float _predictedUntil;
+
+        float XPhase => XPhaseAt(NetClock.Now);
+        float YPhase => YPhaseAt(NetClock.Now);
+
+        float XPhaseAt(double time) => _xPhase0 + (XRunning ? LineSpeed * (float)(time - _stamp) : 0f);
+        float YPhaseAt(double time) => _yPhase0 + (YRunning ? LineSpeed * (float)(time - _stamp) : 0f);
 
         /// <summary>Позиция горизонтальной линии (0 — низ экрана, 1 — верх).</summary>
         public float V => 1f - Mathf.PingPong(XPhase, 1f);
@@ -78,51 +95,75 @@ namespace RocketWars.Launcher
             MatchManager.ConsolesEnabled && Silo.State == SiloState.Ready && !IsLockedFor(NetClock.LocalClientId) &&
             (kind != ConsoleButtonKind.Launch || CanLaunch);
 
-        /// <summary>Локальный игрок нажал кнопку — запрос уходит на сервер.</summary>
+        /// <summary>
+        /// Локальный игрок нажал кнопку — запрос уходит на сервер вместе со временем нажатия.
+        /// Клиент X/Y применяет сразу, не дожидаясь ответа (иначе линия замирает только через пинг до хоста).
+        /// </summary>
         public void RequestPress(ConsoleButtonKind kind)
         {
-            if (NetworkPlayer.LocalPlayer == null)
+            var me = NetworkPlayer.LocalPlayer;
+            if (me == null)
                 return;
             Sfx.PlayAt(Sfx.Click, transform.position, 0.6f, 20f);
-            NetworkPlayer.LocalPlayer.PressConsole(Silo.NetIndex, kind);
+            double now = NetClock.Now;
+            if (!NetClock.IsServer && kind != ConsoleButtonKind.Launch)
+            {
+                ApplyLinePress(kind, now, NetClock.LocalClientId);
+                _predictedPress = now;
+                _predictedUntil = Time.unscaledTime + PredictionTimeout;
+            }
+            me.PressConsole(Silo.NetIndex, kind, now);
         }
 
-        /// <summary>Сервер: применить нажатие.</summary>
-        public void ServerPress(ConsoleButtonKind kind, NetworkPlayer presser)
+        /// <summary>Сервер: применить нажатие, сделанное клиентом в момент pressTime (по общим часам).</summary>
+        public void ServerPress(ConsoleButtonKind kind, NetworkPlayer presser, double pressTime)
         {
             ulong clientId = presser.OwnerClientId;
             if (!MatchManager.ConsolesEnabled || Silo.State != SiloState.Ready || IsLockedFor(clientId))
                 return;
 
-            // фиксируем текущие фазы перед сменой режима
-            _xPhase0 = XPhase;
-            _yPhase0 = YPhase;
-            _stamp = NetClock.Now;
+            // не раньше последнего изменения пульта, не дальше MaxPressRewind в прошлое и не в будущем
+            double now = NetClock.Now;
+            pressTime = System.Math.Min(System.Math.Max(pressTime, System.Math.Max(_stamp, now - MaxPressRewind)), now);
 
-            switch (kind)
+            if (kind == ConsoleButtonKind.Launch)
             {
-                case ConsoleButtonKind.X:
-                    XSet = XRunning;
-                    XRunning = !XRunning;
-                    break;
-                case ConsoleButtonKind.Y:
-                    YSet = YRunning;
-                    YRunning = !YRunning;
-                    break;
-                case ConsoleButtonKind.Launch:
-                    if (!CanLaunch)
-                        return;
-                    var target = ResolveTarget(out bool hasGround);
-                    if (Silo.ServerLaunch(target, hasGround, presser.gameObject, presser.Health.Team))
-                    {
-                        ResetAim();
-                        return;
-                    }
-                    break;
+                if (!CanLaunch)
+                    return;
+                var target = ResolveTarget(out bool hasGround);
+                if (Silo.ServerLaunch(target, hasGround, presser.gameObject, presser.Health.Team))
+                {
+                    ResetAim();
+                    return;
+                }
+                Operator = clientId;
+                _lastPress = pressTime;
+                return;
+            }
+
+            ApplyLinePress(kind, pressTime, clientId);
+        }
+
+        /// <summary>X/Y: зафиксировать фазы линий на момент нажатия и переключить одну из них (одинаково на сервере и в предсказании клиента).</summary>
+        void ApplyLinePress(ConsoleButtonKind kind, double time, ulong clientId)
+        {
+            _xPhase0 = XPhaseAt(time);
+            _yPhase0 = YPhaseAt(time);
+            _stamp = time;
+
+            if (kind == ConsoleButtonKind.X)
+            {
+                XSet = XRunning;
+                XRunning = !XRunning;
+            }
+            else
+            {
+                YSet = YRunning;
+                YRunning = !YRunning;
             }
 
             Operator = clientId;
-            _lastPress = NetClock.Now;
+            _lastPress = time;
         }
 
         void ResetAim()
@@ -146,6 +187,13 @@ namespace RocketWars.Launcher
 
         public void ApplySync(in SiloSync sync)
         {
+            // своё нажатие ещё не дошло до сервера — не откатываем линии к старому состоянию
+            if (_predictedUntil > 0f)
+            {
+                if (sync.LastPress < _predictedPress && Time.unscaledTime < _predictedUntil)
+                    return;
+                _predictedUntil = 0f;
+            }
             XRunning = (sync.ConsoleFlags & FlagXRunning) != 0;
             XSet = (sync.ConsoleFlags & FlagXSet) != 0;
             YRunning = (sync.ConsoleFlags & FlagYRunning) != 0;

@@ -386,7 +386,8 @@ namespace RocketWars.Player
                 ReviveRpc(target.NetworkObject);
         }
 
-        public void PressConsole(int siloIndex, ConsoleButtonKind kind) => PressConsoleRpc(siloIndex, (byte)kind);
+        /// <param name="pressTime">Момент нажатия по общим часам (NetClock): сервер применяет нажатие на этот момент.</param>
+        public void PressConsole(int siloIndex, ConsoleButtonKind kind, double pressTime) => PressConsoleRpc(siloIndex, (byte)kind, pressTime);
 
         // ---------- ящики с припасами ----------
 
@@ -623,14 +624,14 @@ namespace RocketWars.Player
         }
 
         [Rpc(SendTo.Server)]
-        void PressConsoleRpc(int siloIndex, byte kind)
+        void PressConsoleRpc(int siloIndex, byte kind, double pressTime)
         {
             if (_health.IsDowned || MatchNet.Instance == null)
                 return;
             var silo = MatchNet.Instance.GetSilo(siloIndex);
             if (silo == null || Vector3.Distance(transform.position, silo.Console.transform.position) > ConsoleRange)
                 return;
-            silo.Console.ServerPress((ConsoleButtonKind)kind, this);
+            silo.Console.ServerPress((ConsoleButtonKind)kind, this, pressTime);
         }
 
         /// <summary>

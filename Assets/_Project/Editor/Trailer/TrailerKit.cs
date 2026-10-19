@@ -134,7 +134,7 @@ namespace RocketWars.EditorTools.Trailer
         }
 
         /// <summary>Нажать кнопку пульта шахты от имени хоста (как клик ЛКМ).</summary>
-        public static void Press(RocketSilo silo, ConsoleButtonKind kind) => silo.Console.ServerPress(kind, Me);
+        public static void Press(RocketSilo silo, ConsoleButtonKind kind) => silo.Console.ServerPress(kind, Me, NetClock.Now);
 
         /// <summary>Дубль: запись сразу, остановка через seconds (таймлайн режиссёра задаётся отдельно).</summary>
         public static void Shot(string name, float seconds)
