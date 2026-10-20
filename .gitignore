@@ -53,3 +53,4 @@ Thumbs.db
 
 # выкладка VK: копия сборки перед загрузкой
 /Deploy/VK/build/
+/Deploy/Telegram/build/

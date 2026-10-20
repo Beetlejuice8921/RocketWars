@@ -1,0 +1,8 @@
+# Rocket Wars — Telegram Mini App: статика веб-сборки на Cloudflare Workers (только assets, без кода).
+# Адрес: https://rocketwars-tg.tg-placeholder.workers.dev (его же указывать в @BotFather → /myapps → play → Edit Web App URL).
+# Выкладка — deploy.ps1 рядом: копирует самую новую Build/<версия>/Telegram в ./build и вызывает wrangler deploy.
+name = "rocketwars-tg"
+compatibility_date = "2026-10-19"
+
+[assets]
+directory = "./build"

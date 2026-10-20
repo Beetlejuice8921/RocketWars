@@ -50,8 +50,9 @@
 - В заявке выбирать только Web (десктоп): управления с телефона нет.
 
 ## Telegram Mini App
-- Пошагово (хостинг, BotFather, Adsgram) — `Deploy/Telegram/README.md` в корне репозитория; выкладка — `Deploy/Telegram/deploy.ps1`
-  (Cloudflare Pages).
+- Хостинг — Cloudflare Workers (Worker `rocketwars-tg`, только статика): https://rocketwars-tg.tg-placeholder.workers.dev,
+  он же Web App URL в @BotFather. Выкладка — `Deploy/Telegram/deploy.ps1` (берёт самую новую `Build/<версия>/Telegram`;
+  один раз `npx wrangler login`). Для веб-сборки в Unity Hub нужен модуль Web Build Support.
 - SDK: telegram-web-app.js (шаблон вызывает ready/expand, на телефоне — fullscreen и запрет свайпа), реклама — Adsgram
   (`WebPlatform.AdsgramInterstitialBlock` / `AdsgramRewardedBlock`), поддержка — `WebPlatform.TelegramSupportUrl`.
 - Настройки — в Telegram CloudStorage (тот же ключ `rw_prefs` и список WebPlatform.CloudPrefs, что у VK).
