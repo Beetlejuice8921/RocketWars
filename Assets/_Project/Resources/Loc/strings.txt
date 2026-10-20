@@ -90,6 +90,8 @@ Tab — итоги · Esc — пауза	Tab — results · Esc — pause	Tab �
 Код	Code	代码	Código	Código	Code	Code	コード	코드	Kod	Kod	कोड	Код	Codice	Kode	Код	Код	Kod
 Войти по коду	Join by code	用代码加入	Unirse con código	Entrar com código	Mit Code beitreten	Rejoindre par code	コードで参加	코드로 참가	Kodla katıl	Dołącz kodem	कोड से जुड़ें	Увійти за кодом	Entra con codice	Gabung dengan kode	Увайсці па кодзе	Код арқылы кіру	Kod orqali kirish
 ГРОМКОСТЬ	VOLUME	音量	VOLUMEN	VOLUME	LAUTSTÄRKE	VOLUME	音量	볼륨	SES	GŁOŚNOŚĆ	वॉल्यूम	ГУЧНІСТЬ	VOLUME	VOLUME	ГУЧНАСЦЬ	ДЫБЫС	OVOZ
+ЭКРАН	SCREEN	屏幕	PANTALLA	TELA	BILDSCHIRM	ÉCRAN	画面	화면	EKRAN	EKRAN	स्क्रीन	ЕКРАН	SCHERMO	LAYAR	ЭКРАН	ЭКРАН	EKRAN
+Оконный режим	Windowed mode	窗口模式	Modo ventana	Modo janela	Fenstermodus	Mode fenêtré	ウィンドウモード	창 모드	Pencere modu	Tryb okienkowy	विंडो मोड	Віконний режим	Modalità finestra	Mode jendela	Аконны рэжым	Терезе режимі	Oyna rejimi
 Выйти из игры	Quit game	退出游戏	Salir del juego	Sair do jogo	Spiel beenden	Quitter le jeu	ゲーム終了	게임 종료	Oyundan çık	Wyjdź z gry	गेम छोड़ें	Вийти з гри	Esci dal gioco	Keluar game	Выйсці з гульні	Ойыннан шығу	O‘yindan chiqish
 Закрыть (Esc)	Close (Esc)	关闭（Esc）	Cerrar (Esc)	Fechar (Esc)	Schließen (Esc)	Fermer (Échap)	閉じる（Esc）	닫기 (Esc)	Kapat (Esc)	Zamknij (Esc)	बंद करें (Esc)	Закрити (Esc)	Chiudi (Esc)	Tutup (Esc)	Закрыць (Esc)	Жабу (Esc)	Yopish (Esc)
 игроков: {0}	players: {0}	玩家：{0}	jugadores: {0}	jogadores: {0}	Spieler: {0}	joueurs : {0}	プレイヤー：{0}	플레이어: {0}	oyuncu: {0}	graczy: {0}	खिलाड़ी: {0}	гравців: {0}	giocatori: {0}	pemain: {0}	гульцоў: {0}	ойыншылар: {0}	o‘yinchilar: {0}

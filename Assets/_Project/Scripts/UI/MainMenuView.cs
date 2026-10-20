@@ -93,6 +93,7 @@ namespace RocketWars.UI
             Ui.Text(Ui.El(codeRow, "code-side", "code-side-left"), Loc.T("Код"), "label-dim");
             _code = BuildCodeInput(codeRow);
             _joinCode = Ui.Btn(Ui.El(codeRow, "code-side"), Loc.T("Войти по коду"), () => JoinCode(_code.value), "btn-small");
+            Ui.Show(codeRow, !GamePlatform.Current.CanInvite); // в Telegram в комнату заходят по ссылке-приглашению
 
             _status = Ui.Text(panel, NetworkBootstrap.LastMessage ?? "", "status");
         }
