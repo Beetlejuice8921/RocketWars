@@ -1,0 +1,7 @@
+# Скопировать в .dev.vars для локального запуска (npx wrangler dev). .dev.vars в git не попадает.
+BOT_TOKEN=123456:TEST-TOKEN-FOR-LOCAL-CHECKS
+TOKEN_SECRET=local-dev-secret-change-me
+# гости тоже в рейтинге и подтверждают матчи — только для проверки в редакторе
+GUESTS_RANKED=1
+# не проверять длительность матча (тест test/smoke.mjs шлёт отчёты сразу)
+SKIP_DURATION_CHECK=1

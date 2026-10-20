@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using RocketWars.Core;
 using RocketWars.Net;
+using RocketWars.Online;
 using RocketWars.Player;
 using RocketWars.Stats;
 using UnityEngine;
@@ -36,7 +37,7 @@ namespace RocketWars.UI
         };
 
         readonly VisualElement _screen, _panel, _columns, _buttons, _podium, _tooltip;
-        readonly Label _title, _tooltipTitle, _tooltipText;
+        readonly Label _title, _rating, _tooltipTitle, _tooltipText;
         readonly Button _newMatch;
         readonly PodiumStage _stage;
         Action _dismiss;
@@ -49,6 +50,7 @@ namespace RocketWars.UI
             _screen = Ui.El(root, "layer", "overlay");
             _panel = Ui.El(_screen, "panel", "results-panel");
             _title = Ui.Text(_panel, Loc.T("ИТОГИ МАТЧА"), "title", "shadow");
+            _rating = Ui.Text(_panel, "", "results-rating", "shadow");
             _columns = Ui.El(_panel, "results-columns");
 
             _buttons = Ui.El(_panel, "row");
@@ -79,6 +81,7 @@ namespace RocketWars.UI
             _mode = mode;
             Ui.Show(_screen, mode != Mode.Hidden);
             Ui.Show(_buttons, mode == Mode.Final);
+            Ui.Show(_rating, mode == Mode.Final);
             Ui.Show(_podium, mode == Mode.Final);
             _stage.SetActive(mode == Mode.Final);
             _screen.EnableInClassList("results-final", mode == Mode.Final);
@@ -96,6 +99,8 @@ namespace RocketWars.UI
 
             var m = MatchManager.Instance;
             Ui.Show(_newMatch, m != null && m.IsSpawned && m.IsServer && m.CanStartMatch);
+            if (_mode == Mode.Final)
+                UpdateRating();
             _stage.Update();
 
             if (Time.unscaledTime < _nextRebuild)
@@ -164,6 +169,42 @@ namespace RocketWars.UI
 
             if (_mode == Mode.Final)
                 BuildPodium(entries, stats.library);
+        }
+
+        /// <summary>Строка рейтинга под заголовком: «+35 очков · за неделю: 120 · #14 (+3)» или что с отчётом сейчас.</summary>
+        void UpdateRating()
+        {
+            var r = MatchRating.Result;
+            string text = MatchRating.State switch
+            {
+                RatingState.Unrated => Loc.T("Матч без рейтинга: нет связи с сервером рейтинга"),
+                RatingState.Sending => Loc.T("Рейтинг: отправляем итог матча…"),
+                RatingState.Pending => Loc.T("Рейтинг: ждём подтверждения от других игроков…"),
+                RatingState.Rejected => Loc.T("Рейтинг: итог матча не подтвердили другие игроки"),
+                RatingState.Failed => Loc.T("Рейтинг: нет связи с сервером"),
+                RatingState.Credited when r.practice => r.points > 0
+                    ? Loc.F("Тренировка с ботами: +{0} очков", r.points)
+                    : Loc.T("Тренировка с ботами: недельный лимит очков исчерпан"),
+                RatingState.Credited => CreditedText(r),
+                _ => "",
+            };
+            if (_rating.text != text)
+                _rating.text = text;
+            _rating.EnableInClassList("results-rating--good", MatchRating.State == RatingState.Credited);
+        }
+
+        static string CreditedText(MatchResult r)
+        {
+            string text = Loc.F("+{0} очков · за неделю: {1}", r.points, r.weekPoints);
+            if (!RatingApi.Ranked)
+                return text + " · " + Loc.T("Гостевой вход: в общую таблицу попадают игроки Telegram");
+            if (r.rank > 0)
+            {
+                text += $" · #{r.rank}";
+                if (r.rankBefore > r.rank)
+                    text += $" (+{r.rankBefore - r.rank})";
+            }
+            return text;
         }
 
         /// <summary>Пьедестал под таблицей: 2-е, 1-е (в центре, выше) и 3-е место; под победителем — его награды столбиком.</summary>

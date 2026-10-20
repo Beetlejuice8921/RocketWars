@@ -15,6 +15,7 @@
 | Вызовы SDK Яндекса, VK, Telegram | Plugins/WebGL/RWPlatform.jslib |
 | Страницы (подключают SDK) | Assets/WebGLTemplates/RocketWars-Yandex, RocketWars-VK, RocketWars-Telegram |
 | Сборка | Editor/BuildAll.cs |
+| Рейтинг (сервер, выкладка, правила очков) | Backend/README.md; клиент — Scripts/Online |
 
 ## Яндекс Игры
 - Загрузить `Yandex.zip` в консоли разработчика (index.html — в корне архива).

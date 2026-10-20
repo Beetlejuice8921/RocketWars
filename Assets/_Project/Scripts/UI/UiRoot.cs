@@ -29,6 +29,7 @@ namespace RocketWars.UI
         PauseView _pause;
         ResultsView _results;
         OptionsView _options;
+        LeaderboardView _leaderboard;
         TouchControls _touch;
         bool _pauseOpen;
         float _pauseOpenedAt;
@@ -76,6 +77,7 @@ namespace RocketWars.UI
         void Build()
         {
             bool optionsOpen = _options != null && _options.IsOpen; // язык меняют из опций — окно остаётся открытым
+            bool leaderboardOpen = _leaderboard != null && _leaderboard.IsOpen;
             AudioListener.volume = Volume; // громкость могла прийти из облака площадки
             _hud?.Dispose();
             _results?.Dispose();
@@ -94,12 +96,25 @@ namespace RocketWars.UI
             _results = new ResultsView(root);
             _pause = new PauseView(root, () => SetPause(false));
             _menu = new MainMenuView(root);
+            _leaderboard = new LeaderboardView(root);
             _options = new OptionsView(root);
             if (optionsOpen)
                 _options.Open();
+            // dev-сборка: «-openLeaderboard» — сразу окно рейтинга (проверка без мыши)
+            if (Debug.isDebugBuild && !_leaderboardArgDone && System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-openLeaderboard") >= 0)
+            {
+                _leaderboardArgDone = true;
+                leaderboardOpen = true;
+            }
+            if (leaderboardOpen)
+                _leaderboard.Open();
         }
 
+        static bool _leaderboardArgDone;
+
         public void OpenOptions() => _options.Open();
+
+        public void OpenLeaderboard() => _leaderboard.Open();
 
         void OnDestroy()
         {
@@ -138,6 +153,8 @@ namespace RocketWars.UI
             HandleKeys(inGame, match);
 
             _menu.SetVisible(!inGame);
+            if (inGame && _leaderboard.IsOpen)
+                _leaderboard.Close(); // вошли в комнату по приглашению, пока смотрели рейтинг
             var kb = Keyboard.current;
             bool tabHeld = (kb != null && kb.tabKey.isPressed || TouchInput.ScoreHeld) && inGame;
             bool resultsModal = matchEnd && !_resultsDismissed;
@@ -194,6 +211,12 @@ namespace RocketWars.UI
             {
                 if (kb.escapeKey.wasPressedThisFrame)
                     _options.OnEscape();
+                return;
+            }
+            if (_leaderboard.IsOpen)
+            {
+                if (kb.escapeKey.wasPressedThisFrame)
+                    _leaderboard.Close();
                 return;
             }
             if (!inGame)

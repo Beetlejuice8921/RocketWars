@@ -4,6 +4,7 @@ using RocketWars.Combat;
 using RocketWars.Core;
 using RocketWars.Flags;
 using RocketWars.Launcher;
+using RocketWars.Online;
 using RocketWars.Player;
 using Unity.Collections;
 using Unity.Netcode;
@@ -25,11 +26,12 @@ namespace RocketWars.Stats
         public ushort Teamkills;        // положил своих
         public uint Achievements;       // маска по AchievementLibrary
         public bool Left;               // вышел из комнаты
+        public bool Bot;                // бот: в рейтинг не идёт и матч не подтверждает
 
         public bool Equals(PlayerStatsEntry o) =>
             PlayerId == o.PlayerId && Name.Equals(o.Name) && Team == o.Team && EnemiesDowned == o.EnemiesDowned &&
             TimesDowned == o.TimesDowned && Revives == o.Revives && SilosDestroyed == o.SilosDestroyed &&
-            Falls == o.Falls && Teamkills == o.Teamkills && Achievements == o.Achievements && Left == o.Left;
+            Falls == o.Falls && Teamkills == o.Teamkills && Achievements == o.Achievements && Left == o.Left && Bot == o.Bot;
 
         public override bool Equals(object obj) => obj is PlayerStatsEntry o && Equals(o);
         public override int GetHashCode() => PlayerId.GetHashCode();
@@ -47,9 +49,14 @@ namespace RocketWars.Stats
         public AchievementLibrary library;
 
         NetworkList<PlayerStatsEntry> _entries;
+        // id матча на сервере рейтинга (хост регистрирует матч при старте); пусто — матч без рейтинга
+        readonly NetworkVariable<FixedString32Bytes> _ratedMatchId = new NetworkVariable<FixedString32Bytes>();
         MatchManager _match;
+        int _matchSerial; // ответ сервера рейтинга о прошлом матче не должен попасть в новый
 
         public NetworkList<PlayerStatsEntry> Entries => _entries;
+
+        public string RatedMatchId => _ratedMatchId.Value.ToString();
 
         void Awake()
         {
@@ -97,7 +104,14 @@ namespace RocketWars.Stats
 
         void Update()
         {
-            if (!IsServer || !IsSpawned)
+            if (!IsSpawned)
+                return;
+            MatchRating.Tick(this, _match);
+            if (!IsServer)
+                return;
+
+            // итоги матча заморожены: все игроки отправляют на сервер рейтинга одну и ту же таблицу
+            if (_match.Phase == MatchPhase.MatchEnd)
                 return;
 
             // новые игроки появляются в таблице сразу, ушедшие помечаются
@@ -123,6 +137,17 @@ namespace RocketWars.Stats
             foreach (var p in PlayerHealth.All)
                 if (p.IsSpawned)
                     _entries.Add(NewEntry(p));
+            RegisterRatedMatch();
+        }
+
+        /// <summary>Сервер: зарегистрировать матч на сервере рейтинга; нет связи — матч просто без рейтинга.</summary>
+        async void RegisterRatedMatch()
+        {
+            int serial = ++_matchSerial;
+            _ratedMatchId.Value = default;
+            string id = await RatingApi.StartMatch();
+            if (id != null && serial == _matchSerial && IsSpawned && _match.Phase != MatchPhase.MatchEnd)
+                _ratedMatchId.Value = new FixedString32Bytes(id);
         }
 
         void OnDowned(PlayerHealth victim, DamageInfo info)
@@ -278,7 +303,8 @@ namespace RocketWars.Stats
         {
             PlayerId = p.NetworkObjectId,
             Name = new FixedString32Bytes(p.DisplayName),
-            Team = p.Team
+            Team = p.Team,
+            Bot = p.TryGetComponent(out NetworkPlayer np) && np.IsBot
         };
     }
 }

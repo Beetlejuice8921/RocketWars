@@ -16,11 +16,12 @@ mergeInto(LibraryManager.library, {
       send(document.hidden ? 'OnPause' : 'OnResume', 'tab');
     });
 
-    // start — параметр запуска площадки (Telegram: startapp из ссылки-приглашения)
-    var done = function (lang, name, prefs, start) {
+    // start — параметр запуска площадки (Telegram: startapp из ссылки-приглашения);
+    // auth — подписанные данные запуска для сервера рейтинга (Telegram: initData)
+    var done = function (lang, name, prefs, start, auth) {
       if (rw.ready) return;
       rw.ready = true;
-      send('OnInit', JSON.stringify({ lang: lang || '', name: name || '', prefs: prefs || '', start: start || '' }));
+      send('OnInit', JSON.stringify({ lang: lang || '', name: name || '', prefs: prefs || '', start: start || '', auth: auth || '' }));
     };
 
     if (platform === 'yandex' && typeof YaGames !== 'undefined') {
@@ -77,12 +78,12 @@ mergeInto(LibraryManager.library, {
       }
       if (tg.isVersionAtLeast('6.9')) {
         // облако Telegram отвечает быстро, но без ответа за 5 с не держим игру
-        setTimeout(function () { done(tgUser.language_code, tgName, '', tgStart); }, 5000);
+        setTimeout(function () { done(tgUser.language_code, tgName, '', tgStart, tg.initData); }, 5000);
         tg.CloudStorage.getItem('rw_prefs', function (err, value) {
-          done(tgUser.language_code, tgName, err ? '' : value, tgStart);
+          done(tgUser.language_code, tgName, err ? '' : value, tgStart, tg.initData);
         });
       } else {
-        done(tgUser.language_code, tgName, '', tgStart);
+        done(tgUser.language_code, tgName, '', tgStart, tg.initData);
       }
     } else {
       done(navigator.language || '', '');

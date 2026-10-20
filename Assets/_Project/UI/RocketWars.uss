@@ -1320,3 +1320,91 @@
 .touch-mode .podium { width: 96%; }
 .touch-mode .podium-slot { scale: 0.56 0.56; transform-origin: 50% 0; margin: 0 -90px; }
 .touch-mode .podium { margin: 4px 0 4px 0; padding: 2px 0; }
+
+
+/* ---------- рейтинг (LeaderboardView, строка в итогах матча) ---------- */
+
+.results-rating {
+    font-size: 13px;
+    -unity-text-align: middle-center;
+    color: rgb(170, 182, 200);
+    white-space: normal;
+    margin-bottom: 10px;
+}
+
+.results-rating--good {
+    color: rgb(255, 214, 90);
+}
+
+.leaderboard-panel {
+    width: 980px;
+    max-height: 94%;
+    background-color: rgb(28, 32, 40);
+}
+
+.leaderboard-tab {
+    min-width: 220px;
+}
+
+.leaderboard-reset {
+    -unity-text-align: middle-center;
+    margin: 6px 0 10px 0;
+}
+
+.leaderboard-list {
+    max-height: 520px;
+    min-height: 120px;
+}
+
+.leaderboard-row {
+    flex-direction: row;
+    align-items: center;
+    height: 36px;
+    padding: 0 10px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.leaderboard-header {
+    height: 30px;
+    margin: 0 4px;
+    border-bottom-width: 0;
+}
+
+.leaderboard-header > Label {
+    font-size: 10px;
+    color: rgb(170, 182, 200);
+}
+
+.lb-rank {
+    width: 80px;
+    font-size: 12px;
+}
+
+.lb-name {
+    flex-grow: 1;
+    font-size: 12px;
+    overflow: hidden;
+}
+
+.lb-num {
+    width: 140px;
+    font-size: 12px;
+    -unity-text-align: middle-right;
+}
+
+.leaderboard-me {
+    font-size: 12px;
+    color: rgb(255, 214, 90);
+    white-space: normal;
+    margin: 10px 4px 0 4px;
+}
+
+.leaderboard-hint {
+    white-space: normal;
+    margin: 10px 4px;
+}
+
+.touch-mode .leaderboard-panel { width: 94%; }
+.touch-mode .leaderboard-list { max-height: 300px; }
+.touch-mode .lb-num { width: 100px; }

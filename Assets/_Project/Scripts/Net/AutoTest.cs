@@ -1,6 +1,7 @@
 using RocketWars.Combat;
 using RocketWars.Core;
 using RocketWars.Launcher;
+using RocketWars.Online;
 using RocketWars.Player;
 using RocketWars.Stats;
 using RocketWars.Terrain;
@@ -24,6 +25,7 @@ namespace RocketWars.Net
         const float LobbyWaitLimit = 40f;
         const float HostQuitDelay = 8f;
         const float ClientQuitDelay = 5f;
+        const float RatingWaitLimit = 40f;
 
         public int expectClients;
         public float timeout = 400f;
@@ -32,6 +34,7 @@ namespace RocketWars.Net
         int _lastRound = -1;
         float _phaseStart, _nextRocket, _quitAt = -1f;
         bool _knocked, _startRequested;
+        RatingState _lastRating;
 
         public static void Log(string message) => Debug.Log($"{Tag} {message}");
 
@@ -57,7 +60,15 @@ namespace RocketWars.Net
                 Quit();
                 return;
             }
-            if (_quitAt > 0f && now >= _quitAt)
+            if (MatchRating.State != _lastRating)
+            {
+                _lastRating = MatchRating.State;
+                var r = MatchRating.Result;
+                Log($"rating {_lastRating}" + (r != null ? $" status {r.status} points {r.points} week {r.weekPoints} rank {r.rank} practice {r.practice}" : ""));
+            }
+            // итог рейтинга приходит через несколько секунд после конца матча — дождаться его (не дольше RatingWaitLimit)
+            bool ratingBusy = MatchRating.State == RatingState.Sending || MatchRating.State == RatingState.Pending;
+            if (_quitAt > 0f && now >= _quitAt && (!ratingBusy || now >= _quitAt + RatingWaitLimit))
             {
                 Log("DONE");
                 Quit();

@@ -1,0 +1,13 @@
+# Rocket Wars — сервер рейтинга. Выкладка: Backend/deploy.ps1 (или npx wrangler deploy из этой папки).
+name = "rocketwars-api"
+main = "src/index.js"
+compatibility_date = "2026-10-19"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rocketwars"
+# id выдаёт `npx wrangler d1 create rocketwars` (deploy.ps1 подставляет его сам)
+database_id = "fc4593ae-4202-43c2-9c97-0ddfaf54be11"
+
+# секреты (не в репозитории): npx wrangler secret put BOT_TOKEN / TOKEN_SECRET
+# локально — файл .dev.vars (см. .dev.vars.example)

@@ -49,6 +49,7 @@ namespace RocketWars.UI
             Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
 
             var side = Ui.El(column, "menu-side");
+            Ui.Btn(side, Loc.T("Рейтинг"), () => UiRoot.Instance?.OpenLeaderboard(), "btn-primary", "menu-side-btn");
             Ui.Btn(side, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions(), "menu-side-btn");
             if (GamePlatform.Current.SupportUrl != null)
                 Ui.Btn(side, Loc.T("Поддержка"), () => GamePlatform.Current.OpenSupport(), "menu-side-btn");

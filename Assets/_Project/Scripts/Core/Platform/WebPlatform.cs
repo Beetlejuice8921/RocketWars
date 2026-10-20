@@ -44,7 +44,7 @@ namespace RocketWars.Core
 
         readonly string _id;
         string _cloudSaved;
-        string _accountName, _inviteCode;
+        string _accountName, _inviteCode, _authData;
         bool _initialized, _readyPending;
         Action<bool> _adClosed;
 
@@ -85,6 +85,13 @@ namespace RocketWars.Core
             if (!CanInvite || string.IsNullOrEmpty(roomCode))
                 return;
             RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
+        }
+
+        public override bool TryGetAccountProof(out string provider, out string data)
+        {
+            provider = _id == "telegram" && !string.IsNullOrEmpty(_authData) ? "telegram" : null;
+            data = provider != null ? _authData : null;
+            return provider != null;
         }
 
         public override string TakeInviteCode()
@@ -139,6 +146,7 @@ namespace RocketWars.Core
             var data = JsonUtility.FromJson<InitData>(json);
             _accountName = string.IsNullOrWhiteSpace(data.name) ? null : data.name.Trim();
             _inviteCode = ParseInviteCode(data.start);
+            _authData = data.auth;
             _initialized = true;
             Debug.Log($"[RocketWars] platform {_id}: lang '{data.lang}', name '{_accountName}', start '{data.start}', cloud prefs {data.prefs?.Length ?? 0} chars");
             if (UsesCloudPrefs)
@@ -278,6 +286,7 @@ namespace RocketWars.Core
             public string name;
             public string prefs;
             public string start;
+            public string auth; // Telegram: initData целиком (подпись проверяет сервер рейтинга)
         }
 
         [Serializable]

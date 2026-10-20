@@ -97,6 +97,16 @@ namespace RocketWars.Core
         /// <summary>Имя игрока из аккаунта площадки; null — площадка имени не даёт, берём введённое в меню.</summary>
         public virtual string AccountName => null;
 
+        /// <summary>
+        /// Подписанное площадкой подтверждение аккаунта для сервера рейтинга (Telegram — initData).
+        /// false — площадка его не даёт, игрок входит гостем.
+        /// </summary>
+        public virtual bool TryGetAccountProof(out string provider, out string data)
+        {
+            provider = data = null;
+            return false;
+        }
+
         /// <summary>Игра загрузилась и готова к игре (Яндекс: LoadingAPI.ready).</summary>
         public virtual void GameReady() { }
 
