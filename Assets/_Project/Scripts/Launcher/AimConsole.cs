@@ -104,7 +104,10 @@ namespace RocketWars.Launcher
             var me = NetworkPlayer.LocalPlayer;
             if (me == null)
                 return;
-            Sfx.PlayAt(Sfx.Click, transform.position, 0.6f, 20f);
+            // X/Y: писк — линия пошла, подтверждение — остановилась; Launch — щелчок (дальше сирена)
+            bool running = kind == ConsoleButtonKind.X ? XRunning : YRunning;
+            var clip = kind == ConsoleButtonKind.Launch ? Sfx.Click : running ? Sfx.ConsoleConfirm : Sfx.ConsoleStart;
+            Sfx.PlayAt(clip, transform.position, 0.6f, 20f);
             double now = NetClock.Now;
             if (!NetClock.IsServer && kind != ConsoleButtonKind.Launch)
             {
@@ -114,6 +117,9 @@ namespace RocketWars.Launcher
             }
             me.PressConsole(Silo.NetIndex, kind, now);
         }
+
+        /// <summary>Нажал кнопку, которая сейчас не работает (её IsInteractable = false) — звук ошибки, только себе.</summary>
+        public void PlayDenied() => Sfx.PlayAt(Sfx.ConsoleError, transform.position, 0.6f, 20f);
 
         /// <summary>Сервер: применить нажатие, сделанное клиентом в момент pressTime (по общим часам).</summary>
         public void ServerPress(ConsoleButtonKind kind, NetworkPlayer presser, double pressTime)

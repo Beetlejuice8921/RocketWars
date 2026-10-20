@@ -197,6 +197,13 @@ namespace RocketWars.Player
             if (_rideSlot.Value != slot) _rideSlot.Value = (byte)slot;
         }
 
+        /// <summary>Схватился за ракету — слышат все (у владельца срабатывает сразу при записи).</summary>
+        void OnRideChanged(int previous, int current)
+        {
+            if (previous < 0 && current >= 0)
+                Sfx.PlayAt(Sfx.RocketGrab, transform.position + Vector3.up, IsLocalHuman ? 0.5f : 0.7f, 25f);
+        }
+
         /// <summary>Сервер: игрок упал с острова и был возвращён (для статистики «Лемминг»).</summary>
         public static event Action<NetworkPlayer> AnyFell;
         /// <summary>Сервер: этот игрок поднял союзника (для статистики «Медик»).</summary>
@@ -235,6 +242,7 @@ namespace RocketWars.Player
                 if (!IsOwner)
                     gameObject.AddComponent<MovementGuard>();
             }
+            _rideSilo.OnValueChanged += OnRideChanged;
             _fps.IsLocal = IsLocalHuman;
             _fps.Simulate = IsOwner;
             if (IsOwner)
@@ -249,6 +257,7 @@ namespace RocketWars.Player
         public override void OnNetworkDespawn()
         {
             _fps.HardLanding -= OnHardLanding;
+            _rideSilo.OnValueChanged -= OnRideChanged;
             if (IsServer)
             {
                 Bullet.ServerHit -= OnServerBulletHit;

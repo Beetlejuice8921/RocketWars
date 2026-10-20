@@ -76,13 +76,10 @@ namespace RocketWars.Launcher
             go.transform.position = rocket.Evaluate(Mathf.Min(rocket._t, rocket._duration));
             go.transform.rotation = rocket.Orientation(rocket.CurrentVelocity, rocket._t);
 
-            Sfx.PlayAt(Sfx.Launch, info.Start, 1f, 150f);
-            // гул в полёте: слышно, как ракета проходит над головой
-            var audio = Sfx.Configure(go.AddComponent<AudioSource>(), 140f);
-            audio.clip = Sfx.RocketLoop;
-            audio.loop = true;
+            // в звуке пуска уже и старт, и полёт — он летит вместе с ракетой: слышно, как она проходит над головой
+            var audio = Sfx.Configure(go.AddComponent<AudioSource>(), 150f);
+            audio.clip = Sfx.Launch;
             audio.dopplerLevel = 0.7f;
-            audio.volume = 0.8f;
             audio.Play();
             Spawned?.Invoke(rocket);
             return rocket;

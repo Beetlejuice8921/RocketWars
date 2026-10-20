@@ -30,14 +30,20 @@ namespace RocketWars.Core
 
         /// <summary>Сирена шахты перед пуском (зацикливается, 3D).</summary>
         public static AudioClip Siren => Get(nameof(Siren));
-        /// <summary>Пуск ракеты из шахты (3D).</summary>
+        /// <summary>Пуск и полёт ракеты — играет источник на самой ракете (3D).</summary>
         public static AudioClip Launch => Get(nameof(Launch));
-        /// <summary>Гул ракеты в полёте (зацикливается, 3D).</summary>
-        public static AudioClip RocketLoop => Get(nameof(RocketLoop));
         /// <summary>Взрыв ракеты; базука играет его же выше тоном (3D).</summary>
         public static AudioClip Explosion => Get(nameof(Explosion));
         /// <summary>Кнопка пульта (3D, тихо).</summary>
         public static AudioClip Click => Get(nameof(Click));
+        /// <summary>Пульт: линия пошла (3D, слышит нажавший).</summary>
+        public static AudioClip ConsoleStart => Get(nameof(ConsoleStart));
+        /// <summary>Пульт: линия зафиксирована (3D, слышит нажавший).</summary>
+        public static AudioClip ConsoleConfirm => Get(nameof(ConsoleConfirm));
+        /// <summary>Пульт: кнопка сейчас не нажимается — занят другим, шахта не готова, Launch без цели (3D, слышит нажавший).</summary>
+        public static AudioClip ConsoleError => Get(nameof(ConsoleError));
+        /// <summary>Схватился за ракету (3D).</summary>
+        public static AudioClip RocketGrab => Get(nameof(RocketGrab));
 
         // ---------- персонаж ----------
 
@@ -75,6 +81,10 @@ namespace RocketWars.Core
             new Keyframe(0.31f, 0.12f),
             new Keyframe(0.56f, 0.055f),
             new Keyframe(1f, 0f));
+        /// <summary>Оттолкнулся в прыжке (3D, до 20 м).</summary>
+        public static AudioClip Jump => Get(nameof(Jump));
+        /// <summary>Приземлился после прыжка или падения (3D, до 20 м).</summary>
+        public static AudioClip Land => Get(nameof(Land));
         /// <summary>Получил урон (3D).</summary>
         public static AudioClip Hurt => Get(nameof(Hurt));
         /// <summary>Лёг (3D).</summary>
@@ -121,7 +131,7 @@ namespace RocketWars.Core
 
         /// <summary>Фон главного меню (зацикливается, 2D).</summary>
         public static AudioClip AmbientMenu => Get(nameof(AmbientMenu));
-        /// <summary>Фон в игре — лобби и матч (зацикливается, 2D).</summary>
+        /// <summary>Фон в игре — лобби и матч, ветер (зацикливается без щелчка на стыке, 2D).</summary>
         public static AudioClip AmbientMatch => Get(nameof(AmbientMatch));
 
         // ---------- проигрывание ----------

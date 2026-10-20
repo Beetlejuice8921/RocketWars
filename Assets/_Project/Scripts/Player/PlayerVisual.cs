@@ -40,6 +40,10 @@ namespace RocketWars.Player
         FpsController _controller;
         CharacterController _cc;
         Vector3 _lastPos;
+        bool _wasOnGround = true;
+        float _airTime;
+        /// <summary>Сход с бортика блока — не приземление.</summary>
+        const float MinAirTimeForLanding = 0.25f;
         float _phase, _swing;
         const float CrawlStroke = 0.9f; // метров на полный цикл гребков
         bool _wasDowned;
@@ -284,7 +288,10 @@ namespace RocketWars.Player
             float dt = Mathf.Max(Time.deltaTime, 1e-4f);
             Vector3 horizontal = new Vector3(delta.x, 0f, delta.z);
             float speed = horizontal.magnitude / dt;
-            bool grounded = Mathf.Abs(delta.y / dt) < 1.5f && speed < 20f; // телепорт не считаем шагом
+            bool onGround = OnGround();
+            UpdateJumpLand(onGround, delta.y / dt, speed, dt);
+            // в прыжке (под ногами пусто) не топаем; телепорт не считаем шагом
+            bool grounded = onGround && Mathf.Abs(delta.y / dt) < 1.5f && speed < 20f;
 
             // купол парашюта — и у лежащих (их тоже может сбросить с высоты)
             UpdateParachute(_net != null && _net.ParachuteOpen, dt);
@@ -380,6 +387,29 @@ namespace RocketWars.Player
 
             ApplyBerserkPose(_swing / MaxSwing);
             ApplyMorph();
+        }
+
+        /// <summary>
+        /// Под ногами есть опора (луч вниз чуть ниже подошв). Одинаково для своего и чужих игроков — у чужих
+        /// CharacterController не двигается и его isGrounded не годится. Свой коллайдер луч не ловит: начинается внутри него.
+        /// </summary>
+        bool OnGround() =>
+            Physics.Raycast(transform.position + Vector3.up * 0.2f, Vector3.down, 0.45f, ~0, QueryTriggerInteraction.Ignore);
+
+        /// <summary>Оторвался от земли вверх — звук прыжка; коснулся земли после заметного полёта — приземления.</summary>
+        void UpdateJumpLand(bool onGround, float verticalSpeed, float speed, float dt)
+        {
+            bool riding = _net != null && _net.IsRiding;
+            if (!riding && speed < 20f && onGround != _wasOnGround) // на ракете и при телепорте не звучим
+            {
+                float volume = _controller != null && _controller.IsLocal ? 0.35f : 0.5f;
+                if (!onGround && verticalSpeed > 2f)
+                    Sfx.PlayAt(Sfx.Jump, transform.position, volume, 20f, Random.Range(0.95f, 1.05f), Sfx.FootstepRolloff);
+                else if (onGround && _airTime > MinAirTimeForLanding)
+                    Sfx.PlayAt(Sfx.Land, transform.position, volume, 20f, Random.Range(0.95f, 1.05f), Sfx.FootstepRolloff);
+            }
+            _airTime = onGround || riding ? 0f : _airTime + dt;
+            _wasOnGround = onGround;
         }
 
         /// <summary>Лежащий ползёт: руки загребают по земле, ноги отталкиваются, шуршит на каждом гребке.</summary>

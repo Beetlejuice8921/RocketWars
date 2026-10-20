@@ -46,14 +46,20 @@ namespace RocketWars.Player
             if (Physics.Raycast(ray, out var hit, range, ~0, QueryTriggerInteraction.Collide))
                 Hovered = hit.collider.GetComponent<ConsoleButton>();
 
-            if (Hovered != null && !justLocked && GameInput.WasPressed(GameAction.Fire) && Hovered.IsInteractable)
-                Hovered.Console.RequestPress(Hovered.Kind);
+            if (Hovered != null && !justLocked && GameInput.WasPressed(GameAction.Fire))
+                Press(Hovered);
 
             // тап по экрану: кнопка пульта под пальцем (целиться в мелкие кнопки прицелом с телефона неудобно)
             if (TouchInput.TryGetTap(out var tap) &&
                 Physics.Raycast(cam.ScreenPointToRay(tap), out var tapHit, range, ~0, QueryTriggerInteraction.Collide) &&
-                tapHit.collider.GetComponent<ConsoleButton>() is ConsoleButton tapped && tapped.IsInteractable)
-                tapped.Console.RequestPress(tapped.Kind);
+                tapHit.collider.GetComponent<ConsoleButton>() is ConsoleButton tapped)
+                Press(tapped);
+        }
+
+        static void Press(ConsoleButton button)
+        {
+            if (button.IsInteractable) button.Console.RequestPress(button.Kind);
+            else button.Console.PlayDenied();
         }
     }
 }
