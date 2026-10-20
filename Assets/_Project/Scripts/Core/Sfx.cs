@@ -48,25 +48,36 @@ namespace RocketWars.Core
         // ---------- персонаж ----------
 
         /// <summary>Шаг шагом — случайный из Footsteps/Foot_Step_grass_01..16 (3D, до 15 м).</summary>
-        public static AudioClip Step => Pick(StepClips, "Footsteps/Foot_Step_grass_");
+        public static AudioClip Step => StepClips.Pick();
         /// <summary>Шаг бегом — случайный из Footsteps/Foot_Run_grass_01..16 (3D, до 20 м).</summary>
-        public static AudioClip RunStep => Pick(RunClips, "Footsteps/Foot_Run_grass_");
+        public static AudioClip RunStep => RunClips.Pick();
 
-        const int FootstepVariants = 16;
-        static readonly AudioClip[] StepClips = new AudioClip[FootstepVariants];
-        static readonly AudioClip[] RunClips = new AudioClip[FootstepVariants];
-        static int _lastPick = -1;
+        static readonly Variants StepClips = new Variants("Footsteps/Foot_Step_grass_", 16);
+        static readonly Variants RunClips = new Variants("Footsteps/Foot_Run_grass_", 16);
 
-        /// <summary>Случайный вариант из набора <paramref name="prefix"/>01..16, не повторяя предыдущий.</summary>
-        static AudioClip Pick(AudioClip[] clips, string prefix)
+        /// <summary>Набор вариантов одного звука: файлы prefix01..NN, случайный — не повторяя предыдущий.</summary>
+        sealed class Variants
         {
-            int i = Random.Range(0, FootstepVariants - 1);
-            if (i >= _lastPick && _lastPick >= 0)
-                i++;
-            _lastPick = i;
-            if (clips[i] == null)
-                clips[i] = Get(prefix + (i + 1).ToString("00"));
-            return clips[i];
+            readonly string _prefix;
+            readonly AudioClip[] _clips;
+            int _last = -1;
+
+            public Variants(string prefix, int count)
+            {
+                _prefix = prefix;
+                _clips = new AudioClip[count];
+            }
+
+            public AudioClip Pick()
+            {
+                int i = Random.Range(0, _clips.Length - 1);
+                if (i >= _last && _last >= 0)
+                    i++;
+                _last = i;
+                if (_clips[i] == null)
+                    _clips[i] = Get(_prefix + (i + 1).ToString("00"));
+                return _clips[i];
+            }
         }
 
         /// <summary>
@@ -106,8 +117,13 @@ namespace RocketWars.Core
         public static AudioClip BazookaShot => Get(nameof(BazookaShot));
         /// <summary>Пуля попала в землю/камень (3D).</summary>
         public static AudioClip BulletImpact => Get(nameof(BulletImpact));
-        /// <summary>Попал по игроку (2D, слышит стрелок).</summary>
-        public static AudioClip HitTick => Get(nameof(HitTick));
+        /// <summary>Попал по игроку — случайный из BulletHits/BulletHit_third_person_01..04 (2D, слышит стрелок).</summary>
+        public static AudioClip HitTick => HitTickClips.Pick();
+        /// <summary>В меня попала пуля — случайный из BulletHits/BulletHit_first_person_01..04 (2D, слышит только раненый).</summary>
+        public static AudioClip BulletHitMe => HitMeClips.Pick();
+
+        static readonly Variants HitTickClips = new Variants("BulletHits/BulletHit_third_person_", 4);
+        static readonly Variants HitMeClips = new Variants("BulletHits/BulletHit_first_person_", 4);
         /// <summary>Положил игрока (2D, слышит стрелок).</summary>
         public static AudioClip HitKill => Get(nameof(HitKill));
 
@@ -117,6 +133,8 @@ namespace RocketWars.Core
         public static AudioClip CrateOpen => Get(nameof(CrateOpen));
         /// <summary>Использована аптечка (3D).</summary>
         public static AudioClip Heal => Get(nameof(Heal));
+        /// <summary>Надел бронежилет из ящика (2D, слышит взявший).</summary>
+        public static AudioClip ArmorUp => Get(nameof(ArmorUp));
         /// <summary>Взял предмет из ящика (2D).</summary>
         public static AudioClip Pickup => Get(nameof(Pickup));
 

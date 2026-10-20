@@ -599,10 +599,16 @@ namespace RocketWars.Player
         {
             if (shooter == gameObject && !IsBot)
                 HitConfirmRpc(target.IsDowned);
+            if (target.gameObject == gameObject && !IsBot)
+                GotShotRpc();
         }
 
         [Rpc(SendTo.Owner)]
         void HitConfirmRpc(bool knockedDown) => HitConfirmed?.Invoke(knockedDown);
+
+        /// <summary>В этого игрока попала пуля — звук только ему (остальные слышат обычный Hurt).</summary>
+        [Rpc(SendTo.Owner)]
+        void GotShotRpc() => Sfx.Play2D(Sfx.BulletHitMe, 0.8f);
 
         [Rpc(SendTo.Server)]
         void FellRpc()
