@@ -145,6 +145,13 @@ namespace RocketWars.Core
         /// <summary>Хлопок облачка при обратном превращении (3D).</summary>
         public static AudioClip Pop => Get(nameof(Pop));
 
+        // ---------- конец матча (играет MatchJingle) ----------
+
+        /// <summary>Победа своей команды в матче (2D, стерео).</summary>
+        public static AudioClip Win => Get(nameof(Win));
+        /// <summary>Поражение своей команды в матче (2D, стерео).</summary>
+        public static AudioClip Lose => Get(nameof(Lose));
+
         // ---------- фон (играет Ambience) ----------
 
         /// <summary>Фон главного меню (зацикливается, 2D).</summary>

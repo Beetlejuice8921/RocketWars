@@ -18,7 +18,7 @@ namespace RocketWars.Core
         public const string VkSupportUrl = "https://vk.ru/club242407320";
 
         /// <summary>Связь с поддержкой в Telegram (канал или чат игры, https://t.me/...). Пусто — кнопки «Поддержка» нет.</summary>
-        public const string TelegramSupportUrl = "";
+        public const string TelegramSupportUrl = "https://t.me/RocketWarsChat";
 
         /// <summary>Ссылка на Mini App (@BotFather → /newapp); приглашение добавляет к ней ?startapp=room_&lt;код&gt;.</summary>
         public const string TelegramAppUrl = "https://t.me/RocketWarsGameBot/play";

@@ -15,7 +15,8 @@ namespace RocketWars.Dev
     /// </summary>
     public class TrailerCapture : MonoBehaviour
     {
-        public const string Root = "D:/ClaudeRocketWars/Trailer/shots";
+        /// <summary>&lt;папка проекта&gt;/Trailer/shots (вне Assets — Unity не импортирует кадры).</summary>
+        public static string Root => Path.GetFullPath(Path.Combine(Application.dataPath, "../Trailer/shots"));
 
         static TrailerCapture _instance;
 

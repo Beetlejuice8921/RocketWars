@@ -54,3 +54,6 @@ Thumbs.db
 # выкладка VK: копия сборки перед загрузкой
 /Deploy/VK/build/
 /Deploy/Telegram/build/
+
+# кадры и ролики из TrailerCapture
+/Trailer/

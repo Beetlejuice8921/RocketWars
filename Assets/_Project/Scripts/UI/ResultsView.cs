@@ -25,6 +25,7 @@ namespace RocketWars.UI
         }
 
         const float RebuildInterval = 0.5f;
+        const float LeftVisibleTime = 10f;
 
         static readonly (string title, string tip)[] Columns =
         {
@@ -40,6 +41,7 @@ namespace RocketWars.UI
         readonly Label _title, _rating, _tooltipTitle, _tooltipText;
         readonly Button _newMatch;
         readonly PodiumStage _stage;
+        readonly Dictionary<ulong, float> _leftAt = new Dictionary<ulong, float>(); // когда увидели, что игрок вышел
         Action _dismiss;
         Mode _mode = Mode.Hidden;
         float _nextRebuild;
@@ -94,6 +96,7 @@ namespace RocketWars.UI
 
         public void Update()
         {
+            TrackLeft();
             if (_mode == Mode.Hidden)
                 return;
 
@@ -120,6 +123,8 @@ namespace RocketWars.UI
             var sig = new System.Text.StringBuilder();
             foreach (var e in stats.Entries)
             {
+                if (LeftLongAgo(e))
+                    continue;
                 entries.Add(e);
                 sig.Append(e.GetHashCode()).Append(e.EnemiesDowned).Append(e.TimesDowned).Append(e.Revives).Append(e.SilosDestroyed)
                     .Append(e.Falls).Append(e.Teamkills).Append(e.Achievements).Append(e.Left).Append(e.Team).Append(";");
@@ -169,6 +174,35 @@ namespace RocketWars.UI
 
             if (_mode == Mode.Final)
                 BuildPodium(entries, stats.library);
+        }
+
+        /// <summary>
+        /// Ушедший игрок висит в таблице с пометкой «(вышел)» недолго, потом строка прячется.
+        /// В сетевой таблице строка остаётся — её по-прежнему получает сервер рейтинга.
+        /// </summary>
+        bool LeftLongAgo(in PlayerStatsEntry e) =>
+            e.Left && _leftAt.TryGetValue(e.PlayerId, out float at) && Time.unscaledTime - at > LeftVisibleTime;
+
+        /// <summary>Засекаем выход и при закрытой таблице — иначе по Tab ушедший провисит ещё LeftVisibleTime.</summary>
+        void TrackLeft()
+        {
+            var stats = StatsNet.Instance;
+            if (stats == null || !stats.IsSpawned)
+            {
+                _leftAt.Clear();
+                return;
+            }
+            bool anyLeft = false;
+            foreach (var e in stats.Entries)
+            {
+                if (!e.Left)
+                    continue;
+                anyLeft = true;
+                if (!_leftAt.ContainsKey(e.PlayerId))
+                    _leftAt[e.PlayerId] = Time.unscaledTime;
+            }
+            if (!anyLeft)
+                _leftAt.Clear(); // новый матч очистил таблицу — забываем старых
         }
 
         /// <summary>Строка рейтинга под заголовком: «+35 очков · за неделю: 120 · #14 (+3)» или что с отчётом сейчас.</summary>
