@@ -230,8 +230,11 @@ namespace RocketWars.Player
             if (sniper)
                 Sfx.PlayAt(Sfx.SniperShot, transform.position + Vector3.up * 1.5f, 1f, 250f, Random.Range(0.95f, 1.03f));
             else
-                Sfx.PlayAt(Sfx.Gunshot, transform.position + Vector3.up * 1.5f, gun ? 0.85f : 1f, 120f,
-                    gun ? Random.Range(0.85f, 0.92f) : Random.Range(0.95f, 1.05f));
+            {
+                bool machineGun = _gunModel != null && _gunModel.activeSelf; // берсерк с золотыми пистолетами — звук пистолета
+                Sfx.PlayAt(machineGun ? Sfx.MachineGunShot : Sfx.Gunshot, transform.position + Vector3.up * 1.5f,
+                    machineGun ? 0.85f : 1f, 120f, Random.Range(0.95f, 1.05f));
+            }
         }
 
         void OnHurt(float amount)

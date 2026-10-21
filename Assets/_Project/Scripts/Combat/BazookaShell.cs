@@ -78,6 +78,14 @@ namespace RocketWars.Combat
                 _muzzleShooter = null;
             }
             s.UpdateVisual();
+
+            // гул полёта летит вместе со снарядом
+            var audio = Sfx.Configure(go.AddComponent<AudioSource>(), 80f);
+            audio.clip = Sfx.BazookaFly;
+            audio.loop = true;
+            audio.volume = 0.8f;
+            audio.dopplerLevel = 0.7f;
+            audio.Play();
             if (catchUpSeconds > 0f)
                 s.Step(Mathf.Min(catchUpSeconds, 0.5f));
             return s;
@@ -193,7 +201,7 @@ namespace RocketWars.Combat
                     growEnd: 0.2f, shrinkStart: 0.5f);
             VoxelFx.Flash(pos);
             CameraShake.AddAt(pos, 0.35f);
-            Sfx.PlayAt(Sfx.Explosion, pos, 0.75f, 150f, Random.Range(1.4f, 1.6f));
+            Sfx.PlayAt(Sfx.BazookaExplosion, pos, 1f, 150f, Random.Range(0.95f, 1.05f));
         }
     }
 }

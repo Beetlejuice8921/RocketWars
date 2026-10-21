@@ -53,11 +53,15 @@ namespace RocketWars.Player
             Progress = 0f;
         }
 
-        /// <summary>Взятый предмет: броня — свой звук, пулемёт/снайперка/маяк — щелчок «взял»; аптечки остаются в ящике.</summary>
+        /// <summary>Взятый предмет: броня, базука и снайперка — свои звуки, остальное — щелчок «взял»; аптечки остаются в ящике.</summary>
         void OnLoot(LootKind kind)
         {
             if (kind == LootKind.Armor)
                 Sfx.Play2D(Sfx.ArmorUp, 0.8f);
+            else if (kind == LootKind.Bazooka)
+                Sfx.Play2D(Sfx.GrabBazooka, 0.8f);
+            else if (kind == LootKind.Sniper)
+                Sfx.Play2D(Sfx.GrabRifle, 0.8f);
             else if (kind != LootKind.Medkits)
                 Sfx.Play2D(Sfx.Pickup, 0.8f);
         }

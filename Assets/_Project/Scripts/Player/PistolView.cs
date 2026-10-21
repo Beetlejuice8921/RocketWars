@@ -320,7 +320,7 @@ namespace RocketWars.Player
             if (sniper)
                 Sfx.Play2D(Sfx.SniperShot, 0.85f);
             else
-                Sfx.Play2D(Sfx.Gunshot, machineGun ? 0.55f : 0.7f);
+                Sfx.Play2D(machineGun ? Sfx.MachineGunShot : Sfx.Gunshot, machineGun ? 0.55f : 0.7f);
             if (armed)
                 MuzzleFlash(muzzle.position, dir);
             else if (!sniper)

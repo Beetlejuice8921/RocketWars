@@ -4,8 +4,9 @@ using UnityEngine;
 namespace RocketWars.Core
 {
     /// <summary>
-    /// Джингл конца матча (2D): своей команде — Sounds/Win, проигравшей — Sounds/Lose, зрителю без команды — ничего.
-    /// Играет только на переходе в MatchEnd, увиденном вживую: зашедший в комнату уже после матча его не слышит.
+    /// Джинглы матча (2D): на старте каждого раунда (вход в отсчёт) — Sounds/RoundStart всем;
+    /// в конце матча своей команде — Sounds/Win, проигравшей — Sounds/Lose, зрителю без команды — ничего.
+    /// Играют только на переходе фазы, увиденном вживую: зашедший в комнату позже их не слышит.
     /// </summary>
     public class MatchJingle : MonoBehaviour
     {
@@ -33,6 +34,8 @@ namespace RocketWars.Core
             }
 
             var s = match.State;
+            if (s.Phase == MatchPhase.Countdown && _lastPhase.HasValue && _lastPhase.Value != MatchPhase.Countdown)
+                Sfx.Play2D(Sfx.RoundStart, Volume);
             if (s.Phase == MatchPhase.MatchEnd && _lastPhase.HasValue && _lastPhase.Value != MatchPhase.MatchEnd)
             {
                 var me = NetworkPlayer.LocalPlayer;

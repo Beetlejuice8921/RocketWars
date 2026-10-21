@@ -32,7 +32,7 @@ namespace RocketWars.Core
         public static AudioClip Siren => Get(nameof(Siren));
         /// <summary>Пуск и полёт ракеты — играет источник на самой ракете (3D).</summary>
         public static AudioClip Launch => Get(nameof(Launch));
-        /// <summary>Взрыв ракеты; базука играет его же выше тоном (3D).</summary>
+        /// <summary>Взрыв ракеты (3D).</summary>
         public static AudioClip Explosion => Get(nameof(Explosion));
         /// <summary>Кнопка пульта (3D, тихо).</summary>
         public static AudioClip Click => Get(nameof(Click));
@@ -98,8 +98,10 @@ namespace RocketWars.Core
         public static AudioClip Land => Get(nameof(Land));
         /// <summary>Получил урон (3D).</summary>
         public static AudioClip Hurt => Get(nameof(Hurt));
-        /// <summary>Лёг (3D).</summary>
-        public static AudioClip Downed => Get(nameof(Downed));
+        /// <summary>Лёг — случайный из Deaths/Death_01..03 (3D).</summary>
+        public static AudioClip Downed => DownedClips.Pick();
+
+        static readonly Variants DownedClips = new Variants("Deaths/Death_", 3);
         /// <summary>Подняли союзника (3D).</summary>
         public static AudioClip Revive => Get(nameof(Revive));
         /// <summary>Сорвался с острова (2D, слышит только упавший).</summary>
@@ -107,14 +109,20 @@ namespace RocketWars.Core
 
         // ---------- оружие ----------
 
-        /// <summary>Выстрел пистолета и пулемёта (свой — 2D, чужой — 3D).</summary>
+        /// <summary>Выстрел пистолета (свой — 2D, чужой — 3D).</summary>
         public static AudioClip Gunshot => Get(nameof(Gunshot));
+        /// <summary>Выстрел пулемёта (свой — 2D, чужой — 3D).</summary>
+        public static AudioClip MachineGunShot => Get(nameof(MachineGunShot));
         /// <summary>Выстрел снайперки.</summary>
         public static AudioClip SniperShot => Get(nameof(SniperShot));
         /// <summary>Затвор снайперки после выстрела (2D).</summary>
         public static AudioClip Bolt => Get(nameof(Bolt));
         /// <summary>Выстрел базуки.</summary>
         public static AudioClip BazookaShot => Get(nameof(BazookaShot));
+        /// <summary>Полёт снаряда базуки — зацикленный источник на самом снаряде (3D).</summary>
+        public static AudioClip BazookaFly => Get(nameof(BazookaFly));
+        /// <summary>Взрыв снаряда базуки (3D).</summary>
+        public static AudioClip BazookaExplosion => Get(nameof(BazookaExplosion));
         /// <summary>Пуля попала в землю/камень (3D).</summary>
         public static AudioClip BulletImpact => Get(nameof(BulletImpact));
         /// <summary>Попал по игроку — случайный из BulletHits/BulletHit_third_person_01..04 (2D, слышит стрелок).</summary>
@@ -137,6 +145,10 @@ namespace RocketWars.Core
         public static AudioClip ArmorUp => Get(nameof(ArmorUp));
         /// <summary>Взял предмет из ящика (2D).</summary>
         public static AudioClip Pickup => Get(nameof(Pickup));
+        /// <summary>Взял базуку из ящика (2D).</summary>
+        public static AudioClip GrabBazooka => Get(nameof(GrabBazooka));
+        /// <summary>Взял снайперскую винтовку из ящика (2D).</summary>
+        public static AudioClip GrabRifle => Get(nameof(GrabRifle));
 
         // ---------- берсерк ----------
 
@@ -145,7 +157,10 @@ namespace RocketWars.Core
         /// <summary>Хлопок облачка при обратном превращении (3D).</summary>
         public static AudioClip Pop => Get(nameof(Pop));
 
-        // ---------- конец матча (играет MatchJingle) ----------
+        // ---------- джинглы матча (играет MatchJingle) ----------
+
+        /// <summary>Старт раунда — начало отсчёта (2D, стерео).</summary>
+        public static AudioClip RoundStart => Get(nameof(RoundStart));
 
         /// <summary>Победа своей команды в матче (2D, стерео).</summary>
         public static AudioClip Win => Get(nameof(Win));
