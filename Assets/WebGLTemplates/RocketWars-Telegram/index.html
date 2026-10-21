@@ -58,6 +58,19 @@
       <div id="loader-bar"><div id="loader-fill"></div></div>
     </div>
     <div id="rotate"><div><b>&#8635;</b><span id="rotate-text">Поверните телефон горизонтально</span></div></div>
+    <script>
+      // захват мыши вне жеста игрока (интерфейс закрылся сам, Esc-кулдаун браузера) браузер отклоняет промисом;
+      // без обработчика загрузчик Unity показывает это как ошибку игры. Глушим — захват вернётся по следующему клику
+      (function () {
+        var p = Element.prototype, orig = p.requestPointerLock;
+        if (!orig) return;
+        p.requestPointerLock = function () {
+          var r = orig.apply(this, arguments);
+          if (r && typeof r.catch === "function") r.catch(function () { });
+          return r;
+        };
+      })();
+    </script>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
     <script>
       var canvas = document.querySelector("#unity-canvas");
