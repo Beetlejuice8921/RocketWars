@@ -284,6 +284,46 @@
     margin: 6px 0 0 0;
 }
 
+/* столбик кнопок слева, «Как играть?» — справа, вровень с первой кнопкой */
+.menu-bottom {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.menu-howto-btn {
+    width: 240px;
+    margin-top: 12px;
+}
+
+/* ---------- как играть ---------- */
+
+.howto-panel {
+    width: 900px;
+    max-height: 94%;
+    background-color: rgb(28, 32, 40);
+}
+
+.howto-list {
+    max-height: 560px;
+    padding: 4px 14px 14px 14px;
+}
+
+.howto-heading {
+    font-size: 13px;
+    color: rgb(120, 210, 140);
+    margin-top: 14px;
+}
+
+.howto-text {
+    font-size: 12px;
+    white-space: normal;
+    color: rgb(225, 230, 238);
+}
+
+.touch-mode .howto-panel { width: 94%; }
+.touch-mode .howto-list { max-height: 300px; }
+
 /* ---------- опции ---------- */
 
 .options-panel {

@@ -42,12 +42,15 @@ namespace RocketWars.UI
             // название — крупно, по центру вверху экрана
             var title = Ui.Text(_screen, "ROCKET WARS", "menu-title", "shadow");
 
-            // колонка у левого края: панель, под ней — «Опции» / «Поддержка» / «Выйти из игры» друг под другом
+            // колонка у левого края: панель, под ней — «Рейтинг» / «Опции» / «Поддержка» / «Выйти из игры» друг под другом
             var column = Ui.El(_screen, "menu-column");
             var panel = Ui.El(column, "panel", "menu-panel");
             Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
 
-            var side = Ui.El(column, "menu-side");
+            // под панелью: слева столбик кнопок, справа (вровень с «Рейтингом») — «Как играть?»
+            var bottom = Ui.El(column, "menu-bottom");
+            var side = Ui.El(bottom, "menu-side");
+            Ui.Btn(bottom, Loc.T("Как играть?"), () => UiRoot.Instance?.OpenHowToPlay(), "menu-side-btn", "menu-howto-btn");
             Ui.Btn(side, Loc.T("Рейтинг"), () => UiRoot.Instance?.OpenLeaderboard(), "btn-primary", "menu-side-btn");
             Ui.Btn(side, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions(), "menu-side-btn");
             if (GamePlatform.Current.SupportUrl != null)
