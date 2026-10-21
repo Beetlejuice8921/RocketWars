@@ -9,8 +9,8 @@ namespace RocketWars.Core
     /// </summary>
     public class Ambience : MonoBehaviour
     {
-        const float MenuVolume = 0.45f;
-        const float MatchVolume = 0.084f; // ветер нормализован до −1 дБ пика — фоном держим примерно на 13 дБ тише музыки меню
+        const float MenuVolume = 0.25f;
+        const float MatchVolume = 0.084f; // ветер нормализован до −1 дБ пика — фоном держим примерно на 9 дБ тише музыки меню
         const float FadeSpeed = 0.5f; // доля громкости в секунду
 
         AudioSource _menu, _match;

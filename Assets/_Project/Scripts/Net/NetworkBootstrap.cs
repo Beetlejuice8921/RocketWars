@@ -64,10 +64,23 @@ namespace RocketWars.Net
             Manager.NetworkConfig.ConnectionApproval = true;
             Manager.NetworkConfig.PlayerPrefab = null;
             // префаб игрока регистрируется через DefaultNetworkPrefabs (NGO собирает список автоматически)
+            EnsureSingleton();
+        }
+
+        /// <summary>
+        /// После ReturnToMenu новый NetworkManager может включиться раньше, чем уничтожится старый:
+        /// тогда NGO не назначает его синглтоном, а OnDestroy старого обнуляет Singleton —
+        /// и Sessions падают с «Cannot start when Singleton is not set».
+        /// </summary>
+        void EnsureSingleton()
+        {
+            if (NetworkManager.Singleton != Manager)
+                Manager.SetSingleton();
         }
 
         void Start()
         {
+            EnsureSingleton();
             Manager.ConnectionApprovalCallback = Approve;
             Manager.OnClientDisconnectCallback += OnClientDisconnect;
             Manager.OnTransportFailure += OnTransportFailure;
@@ -88,7 +101,11 @@ namespace RocketWars.Net
         public static string GetPlayerName(ulong clientId) =>
             Names.TryGetValue(clientId, out var name) ? name : $"Player{clientId}";
 
-        void SetPayload() => Manager.NetworkConfig.ConnectionData = NetProtocol.BuildPayload(PlayerName);
+        void SetPayload()
+        {
+            EnsureSingleton();
+            Manager.NetworkConfig.ConnectionData = NetProtocol.BuildPayload(PlayerName);
+        }
 
         // ---------- LAN ----------
 

@@ -158,6 +158,7 @@ namespace RocketWars.Launcher
             silo._sirenAudio = Sfx.Configure(go.AddComponent<AudioSource>(), 90f);
             silo._sirenAudio.clip = Sfx.Siren;
             silo._sirenAudio.loop = true;
+            silo._sirenAudio.volume = 0.5f;
 
             silo.Console = AimConsole.Create(silo);
             silo._renderers = go.GetComponentsInChildren<MeshRenderer>();
