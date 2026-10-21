@@ -143,30 +143,32 @@ namespace RocketWars.UI
                 Object.Destroy(_root);
         }
 
-        /// <summary>Тот же солдат, что в игре (PlayerVisual), только без оружия и анимации ходьбы.</summary>
-        static void Build(Figure f, int team)
+        static void Build(Figure f, int team) => f.Model = BuildSoldier(f.Pivot, team, Layer, out f.ArmL, out f.ArmR);
+
+        /// <summary>Тот же солдат, что в игре (PlayerVisual), только без оружия и анимации ходьбы; все части — на слое layer.</summary>
+        public static GameObject BuildSoldier(Transform parent, int team, int layer, out Transform armL, out Transform armR, int skin = 0)
         {
             var body = new GameObject("Soldier").transform;
-            body.SetParent(f.Pivot, false);
-            var (bodyMesh, bodyMats) = Models.CharacterBody(team);
+            body.SetParent(parent, false);
+            var (bodyMesh, bodyMats) = Models.CharacterBody(team, skin);
             BoxModel.Spawn(bodyMesh, bodyMats, body, Vector3.zero, "Torso");
-            var (armMesh, armMats) = Models.CharacterArm(team);
-            f.ArmL = BoxModel.Spawn(armMesh, armMats, body, new Vector3(-0.4f, 1.48f, 0f), "ArmL").transform;
-            f.ArmR = BoxModel.Spawn(armMesh, armMats, body, new Vector3(0.4f, 1.48f, 0f), "ArmR").transform;
-            var (legMesh, legMats) = Models.CharacterLeg();
+            var (armMesh, armMats) = Models.CharacterArm(team, skin);
+            armL = BoxModel.Spawn(armMesh, armMats, body, new Vector3(-0.4f, 1.48f, 0f), "ArmL").transform;
+            armR = BoxModel.Spawn(armMesh, armMats, body, new Vector3(0.4f, 1.48f, 0f), "ArmR").transform;
+            var (legMesh, legMats) = Models.CharacterLeg(skin);
             BoxModel.Spawn(legMesh, legMats, body, new Vector3(-0.14f, 0.84f, 0f), "LegL");
             BoxModel.Spawn(legMesh, legMats, body, new Vector3(0.14f, 0.84f, 0f), "LegR");
-            var (helmetMesh, helmetMats) = Models.CharacterHelmet(team);
+            var (helmetMesh, helmetMats) = Models.CharacterHelmet(team, skin);
             BoxModel.Spawn(helmetMesh, helmetMats, body, new Vector3(0f, Models.HelmetBaseY, 0f), "Helmet");
             var (binoMesh, binoMats) = Models.Binoculars();
             BoxModel.Spawn(binoMesh, binoMats, body, new Vector3(0f, 1.24f, 0.24f), "Binoculars").transform.localRotation =
                 Quaternion.Euler(90f, 0f, 0f);
 
             foreach (var t in body.GetComponentsInChildren<Transform>(true))
-                t.gameObject.layer = Layer;
+                t.gameObject.layer = layer;
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            f.Model = body.gameObject;
+            return body.gameObject;
         }
     }
 }

@@ -134,69 +134,63 @@ namespace RocketWars.Core
 
         const float CamoTile = 0.06f;
 
-        static readonly Color CamoOlive = new Color(0.33f, 0.38f, 0.2f);
-        static readonly Color CamoGreen = new Color(0.17f, 0.24f, 0.12f);
-        static readonly Color CamoBrown = new Color(0.36f, 0.27f, 0.17f);
-        static readonly Color CamoKhaki = new Color(0.56f, 0.52f, 0.36f);
-        static readonly Color HelmetOlive = new Color(0.29f, 0.33f, 0.19f);
-        static readonly Color Leather = new Color(0.26f, 0.18f, 0.11f);
-        static readonly Color Buckle = new Color(0.62f, 0.6f, 0.52f);
-        static readonly Color BootBlack = new Color(0.09f, 0.085f, 0.08f);
-        static readonly Color Glove = new Color(0.16f, 0.14f, 0.12f);
+        // скины (Core/Skins) меняют только цвета; парашют и берсерк-форма всегда в стандартном «лесном»
+        static SkinPalette Standard => Skins.Get(0);
 
-        /// <summary>«Лесной» камуфляж: пятна из двух слоёв шума, offset разносит узор между частями тела.</summary>
-        static Color Camo(Vector3 p, float offset)
+        /// <summary>Камуфляж: пятна из двух слоёв шума, offset разносит узор между частями тела; цвета — из скина.</summary>
+        static Color Camo(Vector3 p, float offset, SkinPalette s)
         {
             const float scale = 3.2f;
             float a = Mathf.PerlinNoise(p.x * scale + p.z * scale * 0.7f + offset, p.y * scale + 11.3f);
             float b = Mathf.PerlinNoise(p.z * scale + p.x * scale * 0.5f + 37.1f, p.y * scale * 1.3f + offset * 0.5f);
-            if (a < 0.36f) return CamoGreen;
-            if (a > 0.66f) return CamoBrown;
-            return b > 0.6f ? CamoKhaki : CamoOlive;
+            if (a < 0.36f) return s.CamoDark;
+            if (a > 0.66f) return s.CamoWarm;
+            return b > 0.6f ? s.CamoLight : s.CamoBase;
         }
 
         /// <summary>Шея: где голова крепится к телу (низ головы).</summary>
         public const float NeckY = 1.55f;
 
         /// <summary>Тело солдата с головой; withHead = false — без неё, голову тогда даёт CharacterHead (сцена меню).</summary>
-        public static (Mesh mesh, Material[] materials) CharacterBody(int team, bool withHead = true)
+        public static (Mesh mesh, Material[] materials) CharacterBody(int team, int skin = 0, bool withHead = true)
         {
             var teamColor = RuntimeMaterials.TeamColor(team);
+            var s = Skins.Get(skin);
             var m = new BoxModel()
                 // куртка в камуфляже
-                .PatternBox(new Vector3(0, 1.2f, 0), new Vector3(0.6f, 0.7f, 0.34f), CamoTile, p => Camo(p, 0f))
+                .PatternBox(new Vector3(0, 1.2f, 0), new Vector3(0.6f, 0.7f, 0.34f), CamoTile, p => Camo(p, 0f, s))
                 // нашивки цвета команды на груди и спине — крупные, чтобы читались на любом скине
                 .Box(new Vector3(0.13f, 1.37f, 0.175f), new Vector3(0.2f, 0.15f, 0.014f), teamColor)
                 .Box(new Vector3(0, 1.28f, -0.175f), new Vector3(0.38f, 0.28f, 0.014f), teamColor)
                 // ремень с пряжкой и подсумками
-                .Box(new Vector3(0, 0.89f, 0), new Vector3(0.63f, 0.09f, 0.37f), Leather)
-                .Box(new Vector3(0, 0.89f, 0.19f), new Vector3(0.1f, 0.07f, 0.02f), Buckle)
-                .Box(new Vector3(-0.2f, 0.92f, 0.2f), new Vector3(0.12f, 0.13f, 0.06f), HelmetOlive)
-                .Box(new Vector3(0.2f, 0.92f, 0.2f), new Vector3(0.12f, 0.13f, 0.06f), HelmetOlive)
-                .Box(new Vector3(0, 0.95f, -0.2f), new Vector3(0.22f, 0.15f, 0.07f), HelmetOlive);
+                .Box(new Vector3(0, 0.89f, 0), new Vector3(0.63f, 0.09f, 0.37f), s.Leather)
+                .Box(new Vector3(0, 0.89f, 0.19f), new Vector3(0.1f, 0.07f, 0.02f), s.Buckle)
+                .Box(new Vector3(-0.2f, 0.92f, 0.2f), new Vector3(0.12f, 0.13f, 0.06f), s.Helmet)
+                .Box(new Vector3(0.2f, 0.92f, 0.2f), new Vector3(0.12f, 0.13f, 0.06f), s.Helmet)
+                .Box(new Vector3(0, 0.95f, -0.2f), new Vector3(0.22f, 0.15f, 0.07f), s.Helmet);
             if (withHead)
-                AddHead(m, Vector3.zero);
-            return m.Build(withHead ? $"char_body_{team}" : $"char_torso_{team}");
+                AddHead(m, Vector3.zero, s);
+            return m.Build(withHead ? $"char_body_{team}_{skin}" : $"char_torso_{team}_{skin}");
         }
 
         /// <summary>Отдельная голова: pivot в шее (NeckY), в остальном как на CharacterBody.</summary>
         public static (Mesh mesh, Material[] materials) CharacterHead()
         {
             var m = new BoxModel();
-            AddHead(m, new Vector3(0f, -NeckY, 0f));
+            AddHead(m, new Vector3(0f, -NeckY, 0f), Standard);
             return m.Build("char_head");
         }
 
-        static void AddHead(BoxModel m, Vector3 o)
+        static void AddHead(BoxModel m, Vector3 o, SkinPalette s)
         {
             // голова и лицо
             m.Box(o + new Vector3(0, 1.75f, 0), new Vector3(0.4f, 0.4f, 0.4f), Skin)
              .Box(o + new Vector3(-0.1f, 1.78f, 0.205f), new Vector3(0.08f, 0.06f, 0.02f), Dark)
              .Box(o + new Vector3(0.1f, 1.78f, 0.205f), new Vector3(0.08f, 0.06f, 0.02f), Dark)
              // подбородочный ремень каски
-             .Box(o + new Vector3(-0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), Leather)
-             .Box(o + new Vector3(0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), Leather)
-             .Box(o + new Vector3(0f, 1.555f, -0.06f), new Vector3(0.42f, 0.02f, 0.035f), Leather);
+             .Box(o + new Vector3(-0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), s.Leather)
+             .Box(o + new Vector3(0.205f, 1.62f, -0.06f), new Vector3(0.015f, 0.12f, 0.035f), s.Leather)
+             .Box(o + new Vector3(0f, 1.555f, -0.06f), new Vector3(0.42f, 0.02f, 0.035f), s.Leather);
         }
 
         /// <summary>
@@ -214,7 +208,7 @@ namespace RocketWars.Core
                 float x = (i - (n - 1) * 0.5f) * panel, z = (j - (n - 1) * 0.5f) * panel * 0.8f;
                 // купол: к краям ниже
                 float drop = (x * x + z * z) * 0.13f;
-                var color = (i + j) % 2 == 0 ? CamoOlive : CamoKhaki;
+                var color = (i + j) % 2 == 0 ? Standard.CamoBase : Standard.CamoLight;
                 m.Box(new Vector3(x, top - drop, z), new Vector3(panel, 0.08f, panel * 0.8f), color);
             }
 
@@ -252,13 +246,14 @@ namespace RocketWars.Core
         }
 
         /// <summary>Кисть в перчатке, обхватившая рукоять, и манжета камуфляжного рукава — для вида от первого лица.</summary>
-        public static (Mesh mesh, Material[] materials) ViewModelHand(int team)
+        public static (Mesh mesh, Material[] materials) ViewModelHand(int team, int skin = 0)
         {
+            var s = Skins.Get(skin);
             return new BoxModel()
-                .Box(new Vector3(0f, -0.005f, 0f), new Vector3(0.06f, 0.075f, 0.075f), Glove)                // кулак на рукояти
-                .Box(new Vector3(-0.028f, 0.03f, 0.03f), new Vector3(0.018f, 0.02f, 0.05f), Glove)         // большой палец
-                .PatternBox(new Vector3(0f, -0.03f, -0.1f), new Vector3(0.085f, 0.08f, 0.13f), 0.02f, p => Camo(p, 21f)) // манжета
-                .Build($"vm_hand_{team}");
+                .Box(new Vector3(0f, -0.005f, 0f), new Vector3(0.06f, 0.075f, 0.075f), s.Glove)                // кулак на рукояти
+                .Box(new Vector3(-0.028f, 0.03f, 0.03f), new Vector3(0.018f, 0.02f, 0.05f), s.Glove)         // большой палец
+                .PatternBox(new Vector3(0f, -0.03f, -0.1f), new Vector3(0.085f, 0.08f, 0.13f), 0.02f, p => Camo(p, 21f, s)) // манжета
+                .Build($"vm_hand_{team}_{skin}");
         }
 
         /// <summary>Бинокль: две трубы с окулярами и линзами, pivot в центре, объективы смотрят в +Z.</summary>
@@ -286,17 +281,18 @@ namespace RocketWars.Core
         /// Армейская каска (на 25% крупнее головы): круглый ступенчатый купол, поля и полоса цвета команды.
         /// Отдельная часть с pivot в нижней точке — двигается при приседе, покачивается при ходьбе, слетает при падении.
         /// </summary>
-        public static (Mesh mesh, Material[] materials) CharacterHelmet(int team)
+        public static (Mesh mesh, Material[] materials) CharacterHelmet(int team, int skin = 0)
         {
             const float k = 1.25f;
+            var helmet = Skins.Get(skin).Helmet;
             var m = new BoxModel();
-            VoxelDisc(m, -0.01f * k, 0.02f * k, 0.3f * k, 10, HelmetOlive);               // поля
-            VoxelDisc(m, 0f, 0.12f * k, 0.26f * k, 8, HelmetOlive);                      // купол — ярусами к макушке
-            VoxelDisc(m, 0.12f * k, 0.18f * k, 0.22f * k, 7, HelmetOlive);
-            VoxelDisc(m, 0.18f * k, 0.23f * k, 0.16f * k, 5, HelmetOlive);
-            VoxelDisc(m, 0.23f * k, 0.26f * k, 0.09f * k, 3, HelmetOlive);
+            VoxelDisc(m, -0.01f * k, 0.02f * k, 0.3f * k, 10, helmet);               // поля
+            VoxelDisc(m, 0f, 0.12f * k, 0.26f * k, 8, helmet);                      // купол — ярусами к макушке
+            VoxelDisc(m, 0.12f * k, 0.18f * k, 0.22f * k, 7, helmet);
+            VoxelDisc(m, 0.18f * k, 0.23f * k, 0.16f * k, 5, helmet);
+            VoxelDisc(m, 0.23f * k, 0.26f * k, 0.09f * k, 3, helmet);
             VoxelDisc(m, 0.045f * k, 0.12f * k, 0.26f * k * 1.06f, 8, RuntimeMaterials.TeamColor(team)); // полоса команды (широкая)
-            return m.Build($"char_helmet_{team}");
+            return m.Build($"char_helmet_{team}_{skin}");
         }
 
         /// <summary>Насколько броне-каска приподнята над обычной: из-под неё видны низ купола и полоса команды.</summary>
@@ -320,25 +316,27 @@ namespace RocketWars.Core
         }
 
         /// <summary>Рука: шарнир в плече (0,0,0), висит вниз. Рукав в камуфляже с повязкой цвета команды, перчатка.</summary>
-        public static (Mesh mesh, Material[] materials) CharacterArm(int team)
+        public static (Mesh mesh, Material[] materials) CharacterArm(int team, int skin = 0)
         {
+            var s = Skins.Get(skin);
             return new BoxModel()
-                .PatternBox(new Vector3(0, -0.28f, 0), new Vector3(0.18f, 0.56f, 0.22f), CamoTile, p => Camo(p, 5.7f))
+                .PatternBox(new Vector3(0, -0.28f, 0), new Vector3(0.18f, 0.56f, 0.22f), CamoTile, p => Camo(p, 5.7f, s))
                 .Box(new Vector3(0, -0.15f, 0), new Vector3(0.195f, 0.14f, 0.235f), RuntimeMaterials.TeamColor(team))
-                .Box(new Vector3(0, -0.62f, 0), new Vector3(0.16f, 0.14f, 0.18f), Glove)
-                .Build($"char_arm_{team}");
+                .Box(new Vector3(0, -0.62f, 0), new Vector3(0.16f, 0.14f, 0.18f), s.Glove)
+                .Build($"char_arm_{team}_{skin}");
         }
 
         /// <summary>Нога: шарнир в бедре (0,0,0). Штаны в камуфляже, высокие сапоги.</summary>
-        public static (Mesh mesh, Material[] materials) CharacterLeg()
+        public static (Mesh mesh, Material[] materials) CharacterLeg(int skin = 0)
         {
+            var s = Skins.Get(skin);
             return new BoxModel()
-                .PatternBox(new Vector3(0, -0.27f, 0), new Vector3(0.24f, 0.54f, 0.28f), CamoTile, p => Camo(p, 13.1f))
+                .PatternBox(new Vector3(0, -0.27f, 0), new Vector3(0.24f, 0.54f, 0.28f), CamoTile, p => Camo(p, 13.1f, s))
                 // голенище и стопа сапога
-                .Box(new Vector3(0, -0.66f, 0f), new Vector3(0.26f, 0.32f, 0.3f), BootBlack)
-                .Box(new Vector3(0, -0.785f, 0.05f), new Vector3(0.27f, 0.07f, 0.38f), BootBlack)
-                .Box(new Vector3(0, -0.52f, 0f), new Vector3(0.27f, 0.04f, 0.31f), Leather)
-                .Build("char_leg");
+                .Box(new Vector3(0, -0.66f, 0f), new Vector3(0.26f, 0.32f, 0.3f), s.Boot)
+                .Box(new Vector3(0, -0.785f, 0.05f), new Vector3(0.27f, 0.07f, 0.38f), s.Boot)
+                .Box(new Vector3(0, -0.52f, 0f), new Vector3(0.27f, 0.04f, 0.31f), s.Leather)
+                .Build($"char_leg_{skin}");
         }
             // ---------- ящики с припасами ----------
 
@@ -523,11 +521,11 @@ namespace RocketWars.Core
         public static (Mesh mesh, Material[] materials) BuffChest(int team)
         {
             return new BoxModel()
-                .PatternBox(new Vector3(0f, 1.27f, 0.02f), new Vector3(0.96f, 0.58f, 0.52f), CamoTile, p => Camo(p, 3.3f))
-                .PatternBox(new Vector3(0f, 1.0f, 0f), new Vector3(0.74f, 0.2f, 0.42f), CamoTile, p => Camo(p, 7.9f))   // пресс
-                .Box(new Vector3(-0.2f, 1.33f, 0.285f), new Vector3(0.34f, 0.22f, 0.04f), CamoGreen)                  // грудные мышцы
-                .Box(new Vector3(0.2f, 1.33f, 0.285f), new Vector3(0.34f, 0.22f, 0.04f), CamoGreen)
-                .Box(new Vector3(0f, 1.3f, 0.29f), new Vector3(0.025f, 0.3f, 0.03f), CamoBrown)                      // ложбинка
+                .PatternBox(new Vector3(0f, 1.27f, 0.02f), new Vector3(0.96f, 0.58f, 0.52f), CamoTile, p => Camo(p, 3.3f, Standard))
+                .PatternBox(new Vector3(0f, 1.0f, 0f), new Vector3(0.74f, 0.2f, 0.42f), CamoTile, p => Camo(p, 7.9f, Standard))   // пресс
+                .Box(new Vector3(-0.2f, 1.33f, 0.285f), new Vector3(0.34f, 0.22f, 0.04f), Standard.CamoDark)                  // грудные мышцы
+                .Box(new Vector3(0.2f, 1.33f, 0.285f), new Vector3(0.34f, 0.22f, 0.04f), Standard.CamoDark)
+                .Box(new Vector3(0f, 1.3f, 0.29f), new Vector3(0.025f, 0.3f, 0.03f), Standard.CamoWarm)                      // ложбинка
                 .Build($"buff_chest_{team}");
         }
 

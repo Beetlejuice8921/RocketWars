@@ -243,7 +243,8 @@ namespace RocketWars.Player
             }
             _fps.BotMove = move;
             _fps.BotSprint = retreat;
-            CheckStuck();
+            if (CheckStuck())
+                _strafe = -_strafe; // упёрлись в ракету или ящик — стрейф в другую сторону
         }
 
         PlayerHealth NearestAlly(float maxDistance, bool aliveOnly)

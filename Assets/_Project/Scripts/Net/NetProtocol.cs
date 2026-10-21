@@ -15,7 +15,7 @@ namespace RocketWars.Net
         /// INetworkSerializable-структуры, список сетевых префабов, порядок генерации мира из сида.
         /// Правки, не трогающие сеть, версию не меняют — такие сборки играют вместе.
         /// </summary>
-        public const int Version = 4; // 4: NetworkPlayer.GotShotRpc (звук попадания у раненого); 3: PlayerStatsEntry.Bot, StatsNet._ratedMatchId
+        public const int Version = 5; // 5: PlayerHealth._skin (скины); 4: NetworkPlayer.GotShotRpc (звук попадания у раненого); 3: PlayerStatsEntry.Bot, StatsNet._ratedMatchId
 
         /// <summary>Сообщение об отказе — русский ключ Loc, клиент переводит его сам.</summary>
         public const string MismatchReason = "Версия игры не совпадает с версией комнаты. Обновите игру";

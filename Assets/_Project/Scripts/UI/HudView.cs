@@ -103,9 +103,7 @@ namespace RocketWars.UI
 
             // край каски сверху экрана в приседе (под счётом и прицелом)
             _helmetBrim = Ui.El(_screen, "helmet-brim");
-            Ui.El(_helmetBrim, "helmet-shell");
-            Ui.El(_helmetBrim, "helmet-band");
-            Ui.El(_helmetBrim, "helmet-lip");
+            BuildHelmetArc(_helmetBrim);
 
             // вид в бинокль: маска двух окуляров, сетка, дальномер
             _binoculars = Ui.El(_screen, "layer", "binoculars");
@@ -561,6 +559,30 @@ namespace RocketWars.UI
                     : Loc.F("МАЯК: вражеские шахты на пульте - {0} с", Mathf.CeilToInt(beacon));
         }
 
+        /// <summary>Столбиков в дуге каски и их высота у краёв экрана (доля от высоты в центре).</summary>
+        const int HelmetColumns = 16;
+        const float HelmetEdge = 0.15f, HelmetStep = 0.1f;
+
+        /// <summary>
+        /// Край каски — дуга из узких столбиков разной высоты (ниже всего в центре), ступеньками по-пиксельному:
+        /// скругление одного прямоугольника не может быть больше его высоты, и край выходил почти прямым.
+        /// </summary>
+        static void BuildHelmetArc(VisualElement brim)
+        {
+            for (int i = 0; i < HelmetColumns; i++)
+            {
+                float x = (i + 0.5f) / HelmetColumns * 2f - 1f;
+                float h = Mathf.Lerp(HelmetEdge, 1f, Mathf.Sqrt(1f - x * x));
+                h = Mathf.Round(h / HelmetStep) * HelmetStep;
+                var col = Ui.El(brim, "helmet-col");
+                col.style.left = Length.Percent(100f * i / HelmetColumns);
+                col.style.width = Length.Percent(100f / HelmetColumns);
+                col.style.height = Length.Percent(100f * h);
+                Ui.El(col, "helmet-band");
+                Ui.El(col, "helmet-lip");
+            }
+        }
+
         /// <summary>В приседе сверху опускается край каски и выводится, что защита повышена.</summary>
         void UpdateHelmet(NetworkPlayer me, PlayerHealth health)
         {
@@ -714,11 +736,11 @@ namespace RocketWars.UI
             return true;
         }
 
-        /// <summary>Метка над лежащим союзником: плашка HELP!, расстояние и вылетающие вверх копии надписи.</summary>
+        /// <summary>Метка над лежащим союзником: расстояние и вылетающие вверх надписи HELP!.</summary>
         sealed class HelpMarker
         {
             public VisualElement Root;
-            public Label Badge, Distance;
+            public Label Distance;
             public Label[] Rising;
             public int Meters = -1;
         }
@@ -731,9 +753,8 @@ namespace RocketWars.UI
         HelpMarker CreateHelpMarker()
         {
             var m = new HelpMarker { Root = Ui.El(_sosLayer, "help") };
-            // вылетающие копии — под плашкой, две со сдвигом в полпериода: поток надписей не прерывается
+            // две вылетающие надписи со сдвигом в полпериода: поток не прерывается
             m.Rising = new[] { Ui.Text(m.Root, "HELP!", "help-rise", "shadow"), Ui.Text(m.Root, "HELP!", "help-rise", "shadow") };
-            m.Badge = Ui.Text(m.Root, "HELP!", "help-badge", "shadow");
             m.Distance = Ui.Text(m.Root, "", "help-dist", "shadow");
             m.Root.pickingMode = PickingMode.Ignore;
             foreach (var child in m.Root.Children())
@@ -752,7 +773,7 @@ namespace RocketWars.UI
                 {
                     if (p == health || !p.IsSpawned || !p.IsDowned || p.Team != health.Team)
                         continue;
-                    // над лежащим телом, чтобы плашка его не закрывала
+                    // над лежащим телом, чтобы метка его не закрывала
                     var pos = Ui.WorldToPanel(_screen.panel, cam, p.transform.position + Vector3.up * 2.2f);
                     if (pos == null)
                         continue;
@@ -772,9 +793,8 @@ namespace RocketWars.UI
                         m.Distance.style.scale = new Scale(Vector3.one * Mathf.Max(1f, 0.6f / size));
                     }
 
-                    // плашка слегка пульсирует, у каждого лежащего — со своей фазой
+                    // у каждого лежащего — своя фаза
                     float phase = p.NetworkObjectId * 0.37f;
-                    m.Badge.style.scale = new Scale(Vector3.one * (1f + 0.07f * Mathf.Sin((now + phase) * 7f)));
 
                     // копии надписи улетают вверх, растут и тают
                     for (int i = 0; i < m.Rising.Length; i++)

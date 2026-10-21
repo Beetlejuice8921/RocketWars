@@ -133,6 +133,9 @@ namespace RocketWars.Player
         Vector3 _stuckCheckPos;
         float _stuckWindow, _stuckTime;
         bool _blocked;
+        // обход препятствия (ракета на шахте, ящик): какое-то время идём вбок, сторона держится, пока обходим
+        float _detourTimer, _detourEnd = -99f;
+        int _detourSide = 1;
         readonly Dictionary<Object, float> _blacklist = new Dictionary<Object, float>();
 
         void Awake()
@@ -438,6 +441,22 @@ namespace RocketWars.Player
             }
 
             Vector3 dir = to.normalized;
+            if (_detourTimer > 0f)
+            {
+                // огибаем: в основном вбок, чуть-чуть к цели; сбоку край — на другую сторону
+                _detourTimer -= Time.deltaTime;
+                if (_detourTimer <= 0f)
+                    _detourEnd = Time.time;
+                Vector3 side = Vector3.Cross(Vector3.up, dir) * _detourSide;
+                Vector3 around = (side * 0.9f + dir * 0.3f).normalized;
+                if (!GroundAhead(around))
+                {
+                    _detourSide = -_detourSide;
+                    around = (-side * 0.9f + dir * 0.3f).normalized;
+                }
+                if (GroundAhead(around))
+                    dir = around;
+            }
             if (!GroundAhead(dir))
             {
                 // обход ямы или края: пробуем отклониться
@@ -482,21 +501,30 @@ namespace RocketWars.Player
             _stuckWindow = 0f;
             _stuckTime = 0f;
             _stuckCheckPos = transform.position;
+            _detourTimer = 0f;
         }
 
-        /// <summary>Каждые 0,5 с: если почти не сдвинулись — прыгаем; застряли больше 3 с — путь закрыт.</summary>
-        void CheckStuck()
+        /// <summary>
+        /// Каждые 0,5 с: если почти не сдвинулись — сперва прыгаем (ступенька), не помогло — обходим сбоку
+        /// (иначе бот, запрыгнув на шахту, бесконечно прыгал в ракету); застряли больше 3 с — путь закрыт.
+        /// true — в этом окне застряли.
+        /// </summary>
+        bool CheckStuck()
         {
             _stuckWindow += Time.deltaTime;
             if (_stuckWindow < 0.5f)
-                return;
+                return false;
             float moved = Flat(transform.position - _stuckCheckPos).magnitude;
             _stuckCheckPos = transform.position;
-            if (moved < 0.4f && _fps.IsGrounded)
+            bool stuck = moved < 0.4f && _fps.IsGrounded;
+            if (stuck)
             {
                 _stuckTime += _stuckWindow;
                 _fps.BotCrouch = false;
-                _fps.BotJump();
+                if (_stuckTime <= 0.5f)
+                    _fps.BotJump();
+                else
+                    StartDetour();
                 if (_stuckTime > 3f)
                 {
                     _blocked = true;
@@ -509,6 +537,23 @@ namespace RocketWars.Player
                 _blocked = false;
             }
             _stuckWindow = 0f;
+            return stuck;
+        }
+
+        /// <summary>Начать обход: недавно уже обходили — в ту же сторону (огибаем то же препятствие), иначе — где свободнее.</summary>
+        void StartDetour()
+        {
+            if (_detourTimer > 0f)
+                _detourSide = -_detourSide; // и вбок не идётся — пробуем другую сторону
+            else if (Time.time - _detourEnd > 2f)
+            {
+                Vector3 chest = transform.position + Vector3.up * 1f;
+                Vector3 right = transform.right;
+                float freeRight = Physics.Raycast(chest, right, out var hitR, 3f, ~0, QueryTriggerInteraction.Ignore) ? hitR.distance : 3f;
+                float freeLeft = Physics.Raycast(chest, -right, out var hitL, 3f, ~0, QueryTriggerInteraction.Ignore) ? hitL.distance : 3f;
+                _detourSide = Mathf.Approximately(freeRight, freeLeft) ? (Random.value < 0.5f ? -1 : 1) : freeRight > freeLeft ? 1 : -1;
+            }
+            _detourTimer = Random.Range(0.8f, 1.3f);
         }
 
         /// <summary>Есть ли впереди земля не глубже ~2,5 м (иначе край острова или глубокая воронка).</summary>

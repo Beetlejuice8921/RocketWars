@@ -83,7 +83,6 @@ Tab — итоги · Esc — пауза	Tab — results · Esc — pause	Tab �
 Создать комнату	Create room	创建房间	Crear sala	Criar sala	Raum erstellen	Créer une salle	ルーム作成	방 만들기	Oda oluştur	Utwórz pokój	रूम बनाएँ	Створити кімнату	Crea stanza	Buat room	Стварыць пакой	Бөлме құру	Xona yaratish
 В локальной сети	Local network	局域网	Red local	Rede local	Lokales Netzwerk	Réseau local	ローカルネットワーク	로컬 네트워크	Yerel ağ	Sieć lokalna	लोकल नेटवर्क	У локальній мережі	Rete locale	Jaringan lokal	У лакальнай сетцы	Жергілікті желіде	Lokal tarmoqda
 В интернете	Internet	互联网	Internet	Internet	Internet	Internet	インターネット	인터넷	İnternet	Internet	इंटरनेट	В інтернеті	Internet	Internet	У інтэрнэце	Интернетте	Internetda
-Тестовые боты	Test bots	测试机器人	Bots de prueba	Bots de teste	Testbots	Bots de test	テスト用ボット	테스트 봇	Test botları	Boty testowe	टेस्ट बॉट	Тестові боти	Bot di prova	Bot uji	Тэставыя боты	Сынақ боттары	Test botlari
 ПОИСК КОМНАТЫ	FIND A ROOM	查找房间	BUSCAR SALA	PROCURAR SALA	RAUM SUCHEN	TROUVER UNE SALLE	ルームを探す	방 찾기	ODA BUL	SZUKAJ POKOJU	रूम खोजें	ПОШУК КІМНАТИ	CERCA STANZA	CARI ROOM	ПОШУК ПАКОЯ	БӨЛМЕ ІЗДЕУ	XONA QIDIRISH
 Обновить интернет-комнаты	Refresh internet rooms	刷新互联网房间	Actualizar salas de internet	Atualizar salas da internet	Internet-Räume aktualisieren	Actualiser les salles Internet	インターネットルームを更新	인터넷 방 새로고침	İnternet odalarını yenile	Odśwież pokoje internetowe	इंटरनेट रूम रिफ्रेश करें	Оновити інтернет-кімнати	Aggiorna stanze internet	Muat ulang room internet	Абнавіць інтэрнэт-пакоі	Интернет бөлмелерін жаңарту	Internet xonalarini yangilash
 Подключиться	Connect	连接	Conectar	Conectar	Verbinden	Se connecter	接続	연결	Bağlan	Połącz	कनेक्ट करें	Під'єднатися	Connetti	Hubungkan	Падключыцца	Қосылу	Ulanish
@@ -225,3 +224,9 @@ Esc — пауза	Esc — pause	Esc — 暂停	Esc — pausa	Esc — pausa	Esc 
 ПЕРЕЗАРЯДКА… {0}	RELOADING… {0}	装填中… {0}	RECARGANDO… {0}	RECARREGANDO… {0}	NACHLADEN… {0}	RECHARGE… {0}	装填中… {0}	재장전… {0}	DOLDURULUYOR… {0}	PRZEŁADOWANIE… {0}	RELOADING… {0}	ПЕРЕЗАРЯДЖАННЯ… {0}	RICARICA… {0}	MENGISI… {0}	ПЕРАЗАРАДКА… {0}	ҚАЙТА ОҚТАУ… {0}	QAYTA O‘QLASH… {0}
 УНИЧТОЖЕНА	DESTROYED	已摧毁	DESTRUIDO	DESTRUÍDO	ZERSTÖRT	DÉTRUIT	破壊	파괴됨	YOK EDİLDİ	ZNISZCZONY	DESTROYED	ЗНИЩЕНО	DISTRUTTO	HANCUR	ЗНІШЧАНА	ҚИРАДЫ	YO‘Q QILINDI
 ПУСК	LAUNCH	发射	LANZAR	LANÇAR	START	TIRER	発射	발사	ATEŞ	START	LAUNCH	ПУСК	LANCIO	LUNCUR	ПУСК	ҰШЫР	OTISH
+Скин	Skin	皮肤	Aspecto	Skin	Skin	Skin	スキン	스킨	Kostüm	Skin	स्किन	Скін	Skin	Skin	Скін	Скин	Skin
+СКИНЫ	SKINS	皮肤	ASPECTOS	SKINS	SKINS	SKINS	スキン	스킨	KOSTÜMLER	SKINY	स्किन	СКІНИ	SKIN	SKIN	СКІНЫ	СКИНДЕР	SKINLAR
+Стандарт	Default	默认	Estándar	Padrão	Standard	Standard	標準	기본	Standart	Standard	डिफ़ॉल्ट	Стандарт	Standard	Standar	Стандарт	Стандарт	Standart
+Скоро	Soon	即将推出	Pronto	Em breve	Bald	Bientôt	近日公開	곧 출시	Yakında	Wkrótce	जल्द ही	Незабаром	Presto	Segera	Хутка	Жақында	Tez orada
+Пустыня	Desert	沙漠	Desierto	Deserto	Wüste	Désert	砂漠	사막	Çöl	Pustynia	रेगिस्तान	Пустеля	Deserto	Gurun	Пустыня	Шөл	Sahro
+Спецназ	Special Forces	特种部队	Fuerzas especiales	Forças especiais	Spezialeinheit	Forces spéciales	特殊部隊	특수부대	Özel kuvvetler	Siły specjalne	स्पेशल फोर्स	Спецназ	Forze speciali	Pasukan khusus	Спецназ	Арнайы жасақ	Maxsus kuchlar

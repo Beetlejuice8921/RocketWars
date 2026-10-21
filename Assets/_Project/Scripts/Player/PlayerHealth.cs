@@ -35,8 +35,11 @@ namespace RocketWars.Player
         readonly NetworkVariable<PlayerState> _state = new NetworkVariable<PlayerState>(PlayerState.Alive);
         readonly NetworkVariable<int> _team = new NetworkVariable<int>();
         readonly NetworkVariable<FixedString32Bytes> _name = new NetworkVariable<FixedString32Bytes>();
+        // скин (Core/Skins) пишет владелец — выбор из меню; ботам его ставит сервер
+        readonly NetworkVariable<byte> _skin = new NetworkVariable<byte>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         public int Team => _team.Value;
+        public int Skin => _skin.Value;
         // ник читают каждый кадр (HUD, панель команд) — строку собираем только при смене имени
         FixedString32Bytes _displayNameSource;
         string _displayName = "";
@@ -67,12 +70,15 @@ namespace RocketWars.Player
         public event Action<PlayerState> StateChanged;
         /// <summary>У всех: игрок перешёл в другую команду (лобби / после матча).</summary>
         public event Action<int> TeamChanged;
+        /// <summary>У всех: сменилась команда или скин — модель надо перекрасить.</summary>
+        public event Action LookChanged;
         /// <summary>Сервер: игрок лёг (кто и чем его положил) — для статистики.</summary>
         public static event Action<PlayerHealth, DamageInfo> AnyDowned;
 
         NetworkPlayer _net;
         int _pendingTeam;
         string _pendingName;
+        int _pendingSkin = -1;
 
         void Awake() => _net = GetComponent<NetworkPlayer>();
         void OnEnable() => All.Add(this);
@@ -84,11 +90,16 @@ namespace RocketWars.Player
             {
                 _team.Value = _pendingTeam;
                 _name.Value = new FixedString32Bytes(_pendingName);
+                if (_pendingSkin >= 0)
+                    _skin.Value = (byte)_pendingSkin;
             }
+            if (IsLocalPlayer)
+                _skin.Value = (byte)Skins.Selected;
             _hp.OnValueChanged += OnHpChanged;
             _armor.OnValueChanged += OnHpChanged;
             _state.OnValueChanged += OnStateChanged;
             _team.OnValueChanged += OnTeamChanged;
+            _skin.OnValueChanged += OnSkinChanged;
         }
 
         public override void OnNetworkDespawn()
@@ -97,9 +108,16 @@ namespace RocketWars.Player
             _armor.OnValueChanged -= OnHpChanged;
             _state.OnValueChanged -= OnStateChanged;
             _team.OnValueChanged -= OnTeamChanged;
+            _skin.OnValueChanged -= OnSkinChanged;
         }
 
-        void OnTeamChanged(int oldValue, int newValue) => TeamChanged?.Invoke(newValue);
+        void OnTeamChanged(int oldValue, int newValue)
+        {
+            TeamChanged?.Invoke(newValue);
+            LookChanged?.Invoke();
+        }
+
+        void OnSkinChanged(byte oldValue, byte newValue) => LookChanged?.Invoke();
 
         void OnHpChanged(ObscuredFloat oldValue, ObscuredFloat newValue)
         {
@@ -110,9 +128,10 @@ namespace RocketWars.Player
         void OnStateChanged(PlayerState oldValue, PlayerState newValue) => StateChanged?.Invoke(newValue);
 
         /// <summary>Сервер, до Spawn: команда и имя (применятся при спавне).</summary>
-        public void ServerInit(int team, string displayName)
+        public void ServerInit(int team, string displayName, int skin = -1)
         {
             _pendingTeam = team;
+            _pendingSkin = skin;
             _pendingName = displayName.Length > 28 ? displayName.Substring(0, 28) : displayName;
         }
 

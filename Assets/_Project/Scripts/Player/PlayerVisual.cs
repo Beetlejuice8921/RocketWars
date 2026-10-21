@@ -69,18 +69,19 @@ namespace RocketWars.Player
             _controller = GetComponent<FpsController>();
             _cc = GetComponent<CharacterController>();
             int team = _health.Team;
+            int skin = _health.Skin;
 
             _body = new GameObject("Body").transform;
             _body.SetParent(transform, false);
-            var (bodyMesh, bodyMats) = Models.CharacterBody(team);
+            var (bodyMesh, bodyMats) = Models.CharacterBody(team, skin);
             BoxModel.Spawn(bodyMesh, bodyMats, _body, Vector3.zero, "Torso");
-            var (armMesh, armMats) = Models.CharacterArm(team);
+            var (armMesh, armMats) = Models.CharacterArm(team, skin);
             _armL = BoxModel.Spawn(armMesh, armMats, _body, new Vector3(-0.4f, 1.48f, 0f), "ArmL").transform;
             _armR = BoxModel.Spawn(armMesh, armMats, _body, new Vector3(0.4f, 1.48f, 0f), "ArmR").transform;
-            var (legMesh, legMats) = Models.CharacterLeg();
+            var (legMesh, legMats) = Models.CharacterLeg(skin);
             _legL = BoxModel.Spawn(legMesh, legMats, _body, new Vector3(-0.14f, 0.84f, 0f), "LegL").transform;
             _legR = BoxModel.Spawn(legMesh, legMats, _body, new Vector3(0.14f, 0.84f, 0f), "LegR").transform;
-            var (helmetMesh, helmetMats) = Models.CharacterHelmet(team);
+            var (helmetMesh, helmetMats) = Models.CharacterHelmet(team, skin);
             _helmet = BoxModel.Spawn(helmetMesh, helmetMats, _body, new Vector3(0f, Models.HelmetBaseY, 0f), "Helmet").transform;
             _helmetMesh = helmetMesh;
             _helmetMats = helmetMats;
@@ -157,7 +158,7 @@ namespace RocketWars.Player
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
 
             _health.StateChanged += OnStateChanged;
-            _health.TeamChanged += OnTeamChanged;
+            _health.LookChanged += OnLookChanged;
             _health.Hurt += OnHurt;
             _wasDowned = _health.IsDowned;
             _lastPos = transform.position;
@@ -171,21 +172,27 @@ namespace RocketWars.Player
             if (_health == null)
                 return;
             _health.StateChanged -= OnStateChanged;
-            _health.TeamChanged -= OnTeamChanged;
+            _health.LookChanged -= OnLookChanged;
             _health.Hurt -= OnHurt;
         }
 
-        /// <summary>Перешёл в другую команду: перекрасить нашивки (куртка и жилет), рукава, полосу каски и берсерк-форму.</summary>
-        void OnTeamChanged(int team)
+        /// <summary>
+        /// Сменилась команда или скин: перекрасить форму, нашивки (куртка и жилет), рукава, каску и берсерк-форму.
+        /// </summary>
+        void OnLookChanged()
         {
             if (_body == null)
                 return;
-            SetModel(_body.Find("Torso"), Models.CharacterBody(team));
-            var arm = Models.CharacterArm(team);
+            int team = _health.Team, skin = _health.Skin;
+            SetModel(_body.Find("Torso"), Models.CharacterBody(team, skin));
+            var arm = Models.CharacterArm(team, skin);
             SetModel(_armL, arm);
             SetModel(_armR, arm);
+            var leg = Models.CharacterLeg(skin);
+            SetModel(_legL, leg);
+            SetModel(_legR, leg);
             SetModel(_vest.transform, Models.WornVest(team));
-            (_helmetMesh, _helmetMats) = Models.CharacterHelmet(team);
+            (_helmetMesh, _helmetMats) = Models.CharacterHelmet(team, skin);
             SetModel(_helmet, (_helmetMesh, _helmetMats));
             SetBerserkTeam(team);
         }

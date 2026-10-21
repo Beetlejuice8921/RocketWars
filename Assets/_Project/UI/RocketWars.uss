@@ -373,7 +373,7 @@
 
 .teambar-center {
     align-items: center;
-    margin: 0 6px;
+    margin: 0 8px;
 }
 
 .teambar-scores {
@@ -381,12 +381,12 @@
 }
 
 .teambar-score {
-    font-size: 26px;
-    width: 64px;
-    height: 48px;
+    font-size: 36px;
+    width: 89px;
+    height: 67px;
     -unity-text-align: middle-center;
     color: rgb(255, 255, 255);
-    border-width: 3px;
+    border-width: 5px;
     border-color: rgba(0, 0, 0, 0.6);
 }
 
@@ -396,28 +396,28 @@
 
 .teambar-score1 {
     background-color: rgba(28, 160, 64, 0.85);
-    margin-left: -3px;
+    margin-left: -5px;
 }
 
 .teambar-round {
-    font-size: 9px;
-    margin-top: 4px;
-    padding: 3px 6px;
+    font-size: 13px;
+    margin-top: 6px;
+    padding: 5px 8px;
     color: rgb(255, 255, 255);
     background-color: rgba(0, 0, 0, 0.5);
 }
 
 .teambar-card {
-    width: 66px;
+    width: 104px;
     align-items: center;
-    margin: 0 2px;
+    margin: 0 4px;
 }
 
 .teambar-head {
-    width: 48px;
-    height: 48px;
+    width: 67px;
+    height: 67px;
     background-color: rgba(0, 0, 0, 0.45);
-    border-width: 3px;
+    border-width: 5px;
     border-color: rgba(0, 0, 0, 0.6);
 }
 
@@ -436,15 +436,15 @@
     top: 0;
     right: 0;
     bottom: 0;
-    font-size: 18px;
+    font-size: 25px;
     -unity-text-align: middle-center;
     color: rgb(255, 255, 255);
     text-shadow: 2px 2px 0 rgb(0, 0, 0);
 }
 
 .teambar-name {
-    font-size: 7px;
-    margin-top: 3px;
+    font-size: 12px;
+    margin-top: 5px;
     -unity-text-align: upper-center;
     white-space: nowrap;
 }
@@ -674,48 +674,45 @@
 /* край каски в приседе: выезжает сверху экрана */
 .helmet-brim {
     position: absolute;
-    left: -6%;
-    right: -6%;
+    left: -2%;
+    right: -2%;
     top: 0;
-    height: 17%;
+    height: 21%;
 }
 
-.helmet-shell {
+/* столбик дуги (left/width/height — из кода); полоса и кромка сдвигаются вместе с его низом */
+.helmet-col {
+    position: absolute;
+    top: 0;
+    background-color: rgb(74, 84, 48);
+}
+
+/* цвета непрозрачные: соседние столбики могут на пиксель перекрываться */
+.helmet-band {
     position: absolute;
     left: 0;
     right: 0;
-    top: 0;
-    bottom: 0;
-    background-color: rgb(74, 84, 48);
-    border-bottom-left-radius: 900px;
-    border-bottom-right-radius: 900px;
-}
-
-.helmet-band {
-    position: absolute;
-    left: 8%;
-    right: 8%;
-    bottom: 26%;
-    height: 9%;
-    background-color: rgba(0, 0, 0, 0.18);
-    border-radius: 60px;
+    bottom: 32px;
+    height: 12px;
+    background-color: rgb(61, 69, 39);
 }
 
 .helmet-lip {
     position: absolute;
-    left: 2%;
-    right: 2%;
+    left: 0;
+    right: 0;
     bottom: 0;
-    height: 14%;
+    height: 18px;
     background-color: rgb(46, 52, 30);
-    border-bottom-left-radius: 900px;
-    border-bottom-right-radius: 900px;
 }
 
 .protection {
-    top: 18%;
-    font-size: 17px;
-    color: rgb(150, 235, 140);
+    top: 11%;
+    font-size: 20px;
+    color: rgb(170, 255, 150);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
 }
 
 .crosshair {
@@ -918,22 +915,6 @@
     height: 0;
 }
 
-.help-badge {
-    position: absolute;
-    left: -105px;
-    top: -38px;
-    width: 210px;
-    height: 76px;
-    background-color: rgba(220, 30, 30, 0.92);
-    border-width: 3px;
-    border-color: rgb(255, 255, 255);
-    border-radius: 12px;
-    -unity-text-align: middle-center;
-    font-size: 29px;
-    -unity-font-style: bold;
-    color: rgb(255, 255, 255);
-}
-
 .help-dist {
     position: absolute;
     left: -105px;
@@ -959,17 +940,21 @@
 .info {
     position: absolute;
     left: 24px;
-    top: 52px;
-    font-size: 26px;
+    top: 46px;
+    font-size: 18px;
     color: rgba(255, 255, 255, 0.92);
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.95);
 }
 
 .room-code {
     position: absolute;
     left: 24px;
     top: 20px;
-    font-size: 12px;
+    font-size: 18px;
     -unity-font-style: bold;
+    color: rgb(255, 150, 30);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
 }
 
 .minimap {
@@ -1318,8 +1303,8 @@
 .touch-start .touch-label { font-size: 22px; }
 
 /* телефон: код комнаты и сводка команды — под кнопками «II» и «СЧЁТ» */
-.touch-mode .room-code { top: 110px; }
-.touch-mode .info { top: 140px; font-size: 20px; } /* панель на телефоне и так ×1.4 — 26px упёрлись бы в мини-карту */
+.touch-mode .room-code { top: 110px; font-size: 14px; }
+.touch-mode .info { top: 132px; font-size: 14px; } /* панель на телефоне и так ×1.4 — крупнее упёрлись бы в мини-карту */
 
 /* телефон: итоги во всю ширину (база 1920 там ~1500), пьедестал компактнее — иначе не влезает по высоте */
 .touch-mode .results-panel,
@@ -1340,6 +1325,49 @@
 
 .results-rating--good {
     color: rgb(255, 214, 90);
+}
+
+/* окно скинов: солдат по центру, ячейки скинов снизу */
+.skin-panel {
+    width: 760px;
+    max-height: 94%;
+    align-items: center;
+    background-color: rgb(28, 32, 40);
+}
+
+/* текстура солдата 64×96 — ×4 крупными пикселями; на низком экране сжимается, сохраняя пропорции */
+.skin-figure {
+    width: 256px;
+    height: 384px;
+    min-height: 120px;
+    flex-shrink: 1;
+    -unity-background-scale-mode: scale-to-fit;
+    margin-bottom: 12px;
+}
+
+.skin-list {
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.skin-cell {
+    width: 104px;
+    height: 104px;
+    padding: 0 4px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.skin-cell-locked {
+    background-color: rgb(44, 50, 62);
+    color: rgb(120, 130, 146);
+    border-width: 2px;
+    border-color: rgb(70, 78, 94);
+}
+
+/* кнопка «Скин» справа от поля имени */
+.menu-skin-btn {
+    min-width: 120px;
 }
 
 .leaderboard-panel {

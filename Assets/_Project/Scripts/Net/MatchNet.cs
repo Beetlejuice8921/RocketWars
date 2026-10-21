@@ -592,7 +592,8 @@ namespace RocketWars.Net
             var prefab = NetworkBootstrap.Instance.playerPrefab;
             var go = Instantiate(prefab, _islands[team].GetRandomSpawnPoint(1f), FacingEnemy(team));
             var health = go.GetComponent<PlayerHealth>();
-            health.ServerInit(team, displayName);
+            // боты — в случайном скине; игрок свой скин ставит сам (PlayerHealth.Skin пишет владелец)
+            health.ServerInit(team, displayName, bot ? Random.Range(0, Skins.Count) : -1);
             go.GetComponent<NetworkPlayer>().ServerInit(bot);
             return health;
         }

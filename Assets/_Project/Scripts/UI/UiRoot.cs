@@ -30,6 +30,7 @@ namespace RocketWars.UI
         ResultsView _results;
         OptionsView _options;
         LeaderboardView _leaderboard;
+        SkinView _skins;
         TouchControls _touch;
         bool _pauseOpen;
         float _pauseOpenedAt;
@@ -78,9 +79,11 @@ namespace RocketWars.UI
         {
             bool optionsOpen = _options != null && _options.IsOpen; // язык меняют из опций — окно остаётся открытым
             bool leaderboardOpen = _leaderboard != null && _leaderboard.IsOpen;
+            bool skinsOpen = _skins != null && _skins.IsOpen;
             AudioListener.volume = Volume; // громкость могла прийти из облака площадки
             _hud?.Dispose();
             _results?.Dispose();
+            _skins?.Dispose();
 
             var root = GetComponent<UIDocument>().rootVisualElement;
             root.Clear();
@@ -97,6 +100,7 @@ namespace RocketWars.UI
             _pause = new PauseView(root, () => SetPause(false));
             _menu = new MainMenuView(root);
             _leaderboard = new LeaderboardView(root);
+            _skins = new SkinView(root);
             _options = new OptionsView(root);
             if (optionsOpen)
                 _options.Open();
@@ -108,6 +112,8 @@ namespace RocketWars.UI
             }
             if (leaderboardOpen)
                 _leaderboard.Open();
+            if (skinsOpen)
+                _skins.Open();
         }
 
         static bool _leaderboardArgDone;
@@ -116,10 +122,13 @@ namespace RocketWars.UI
 
         public void OpenLeaderboard() => _leaderboard.Open();
 
+        public void OpenSkins() => _skins.Open();
+
         void OnDestroy()
         {
             _hud?.Dispose();
             _results?.Dispose();
+            _skins?.Dispose();
             if (Instance == this)
                 Instance = null;
         }
@@ -155,6 +164,8 @@ namespace RocketWars.UI
             _menu.SetVisible(!inGame);
             if (inGame && _leaderboard.IsOpen)
                 _leaderboard.Close(); // вошли в комнату по приглашению, пока смотрели рейтинг
+            if (inGame && _skins.IsOpen)
+                _skins.Close();
             var kb = Keyboard.current;
             bool tabHeld = (kb != null && kb.tabKey.isPressed || TouchInput.ScoreHeld) && inGame;
             bool resultsModal = matchEnd && !_resultsDismissed;
@@ -173,6 +184,7 @@ namespace RocketWars.UI
             if (_pauseOpen) _pause.Update();
             _results.Update();
             if (_options.IsOpen) _options.Update();
+            if (_skins.IsOpen) _skins.Update();
 
             CursorFree = !inGame || _pauseOpen || resultsModal || _options.IsOpen;
             UpdatePlatform(inGame, resultsModal);
@@ -217,6 +229,12 @@ namespace RocketWars.UI
             {
                 if (kb.escapeKey.wasPressedThisFrame)
                     _leaderboard.Close();
+                return;
+            }
+            if (_skins.IsOpen)
+            {
+                if (kb.escapeKey.wasPressedThisFrame)
+                    _skins.Close();
                 return;
             }
             if (!inGame)

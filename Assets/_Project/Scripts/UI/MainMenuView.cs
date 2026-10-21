@@ -22,7 +22,6 @@ namespace RocketWars.UI
         readonly TextField _name, _ip, _code;
         readonly ScrollView _list;
         readonly Label _status;
-        readonly Toggle _bots;
         readonly Button _joinCode;
         Label[] _codeCells;
         bool _codeFocused, _codeError, _joiningByCode;
@@ -60,6 +59,7 @@ namespace RocketWars.UI
             Ui.Text(nameRow, Loc.T("Имя"), "label-dim");
             _name = Ui.Field(nameRow, Net != null ? Net.PlayerName : "Player", 24, "grow");
             _name.RegisterValueChangedCallback(e => { if (Net != null) Net.PlayerName = e.newValue; });
+            Ui.Btn(nameRow, Loc.T("Скин"), () => UiRoot.Instance?.OpenSkins(), "btn-small", "menu-skin-btn");
 
             // с LAN — заголовок и две кнопки (сеть / интернет); без LAN (браузер) — одна кнопка «Создать комнату»
             bool lan = GamePlatform.Current.SupportsLan;
@@ -69,11 +69,6 @@ namespace RocketWars.UI
             if (lan)
                 _actions.Add(Ui.Btn(createRow, Loc.T("В локальной сети"), CreateLan, "btn-primary", "grow"));
             _actions.Add(Ui.Btn(createRow, Loc.T(lan ? "В интернете" : "Создать комнату"), CreateInternet, "btn-primary", "grow"));
-            _bots = new Toggle(" " + Loc.T("Тестовые боты")) { value = MatchNet.SpawnTestBots };
-            _bots.AddToClassList("label-dim");
-            _bots.RegisterValueChangedCallback(e => MatchNet.SpawnTestBots = e.newValue);
-            panel.Add(_bots);
-            Ui.Show(_bots, Debug.isDebugBuild); // тестовые боты — только для разработки
 
             Ui.Text(panel, Loc.T("ПОИСК КОМНАТЫ"), "section");
             _list = new ScrollView(ScrollViewMode.Vertical);
