@@ -38,6 +38,7 @@ namespace RocketWars.Core
             boom.SetParent(controller.CameraRoot, false);
             cam.transform.SetParent(boom, false);
             player.gameObject.AddComponent<DownedCamera>().boom = boom;
+            player.gameObject.AddComponent<DownedGrayscale>().cam = cam;
             cam.transform.localPosition = Vector3.zero;
             cam.transform.localRotation = Quaternion.identity;
             cam.nearClipPlane = 0.05f;

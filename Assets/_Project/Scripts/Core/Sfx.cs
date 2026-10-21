@@ -106,6 +106,14 @@ namespace RocketWars.Core
         public static AudioClip Revive => Get(nameof(Revive));
         /// <summary>Сорвался с острова (2D, слышит только упавший).</summary>
         public static AudioClip FallWhistle => Get(nameof(FallWhistle));
+        /// <summary>Поднял бинокль или оптику снайперки к глазам (3D, тихо).</summary>
+        public static AudioClip BinocularOn => Get(nameof(BinocularOn));
+        /// <summary>Опустил бинокль или оптику (3D, тихо).</summary>
+        public static AudioClip BinocularOff => Get(nameof(BinocularOff));
+        /// <summary>Раскрылся парашют (3D).</summary>
+        public static AudioClip ParachuteOpen => Get(nameof(ParachuteOpen));
+        /// <summary>Парашют отстегнули или сложили при приземлении (3D).</summary>
+        public static AudioClip ParachuteDrop => Get(nameof(ParachuteDrop));
 
         // ---------- оружие ----------
 
@@ -115,6 +123,8 @@ namespace RocketWars.Core
         public static AudioClip MachineGunShot => Get(nameof(MachineGunShot));
         /// <summary>Выстрел снайперки.</summary>
         public static AudioClip SniperShot => Get(nameof(SniperShot));
+        /// <summary>Передёрнул затвор пистолета — при появлении на острове (2D, слышит появившийся).</summary>
+        public static AudioClip PistolCock => Get(nameof(PistolCock));
         /// <summary>Затвор снайперки после выстрела (2D).</summary>
         public static AudioClip Bolt => Get(nameof(Bolt));
         /// <summary>Выстрел базуки.</summary>
@@ -175,6 +185,15 @@ namespace RocketWars.Core
         public static AudioClip AmbientMenu => Get(nameof(AmbientMenu));
         /// <summary>Фон в игре — лобби и матч, ветер (зацикливается без щелчка на стыке, 2D).</summary>
         public static AudioClip AmbientMatch => Get(nameof(AmbientMatch));
+
+        // ---------- интерфейс ----------
+
+        /// <summary>Нажата кнопка интерфейса — любая, созданная через Ui.Btn (2D).</summary>
+        public static AudioClip UiClick => Get(nameof(UiClick));
+        /// <summary>Открылось меню паузы в игре (2D).</summary>
+        public static AudioClip PauseOn => Get(nameof(PauseOn));
+        /// <summary>Меню паузы закрылось (2D).</summary>
+        public static AudioClip PauseOff => Get(nameof(PauseOff));
 
         // ---------- проигрывание ----------
 

@@ -1166,6 +1166,29 @@
     margin: 6px;
 }
 
+/* команда-победитель: рамка (цвет — из кода, по команде) и плашка над названием */
+.results-team--winner {
+    border-width: 3px;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+.results-winner-tag {
+    align-self: center;
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    padding: 2px 14px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+}
+
+/* надпись о победителе перед таблицей итогов */
+.results-intro {
+    top: 38%;
+    font-size: 96px;
+}
+
 .results-team-title {
     font-size: 20px;
     -unity-font-style: bold;

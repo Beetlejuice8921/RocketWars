@@ -434,6 +434,8 @@ namespace RocketWars.Player
             ResetEye();
             _ignoreNextLanding = true; // появление сверху острова — не «падение»
             _airPeakY = position.y;
+            if (IsLocal)
+                Sfx.Play2D(Sfx.PistolCock, 0.8f); // появился на острове — передёрнул затвор пистолета
             // без телепорта NetworkTransform чужие копии «проплывут» через всю карту
             if (TryGetComponent(out NetworkTransform nt) && nt.IsSpawned && nt.CanCommitToTransform)
                 nt.Teleport(position, transform.rotation, transform.localScale);

@@ -13,7 +13,8 @@ namespace RocketWars.UI
     /// <summary>
     /// Таблица результатов: две колонки по командам, у каждого игрока — положил врагов / лёг сам / поднял /
     /// шахты / падения / положил своих и значки достижений (описание — при наведении).
-    /// В конце матча открывается сама (Final), во время игры — пока зажат Tab (Peek).
+    /// В конце матча открывается сама (Final): сначала крупная надпись «ПОБЕДИЛИ …», потом таблица
+    /// с отмеченной командой-победителем; во время игры — пока зажат Tab (Peek).
     /// </summary>
     public class ResultsView
     {
@@ -26,6 +27,7 @@ namespace RocketWars.UI
 
         const float RebuildInterval = 0.5f;
         const float LeftVisibleTime = 10f;
+        const float IntroTime = 3f; // столько висит надпись о победителе перед таблицей
 
         static readonly (string title, string tip)[] Columns =
         {
@@ -38,13 +40,13 @@ namespace RocketWars.UI
         };
 
         readonly VisualElement _screen, _panel, _columns, _buttons, _podium, _tooltip;
-        readonly Label _title, _rating, _tooltipTitle, _tooltipText;
+        readonly Label _title, _rating, _tooltipTitle, _tooltipText, _intro;
         readonly Button _newMatch;
         readonly PodiumStage _stage;
         readonly Dictionary<ulong, float> _leftAt = new Dictionary<ulong, float>(); // когда увидели, что игрок вышел
         Action _dismiss;
         Mode _mode = Mode.Hidden;
-        float _nextRebuild;
+        float _nextRebuild, _introEnd;
         string _signature;
 
         public ResultsView(VisualElement root)
@@ -65,6 +67,9 @@ namespace RocketWars.UI
             _podium.pickingMode = PickingMode.Ignore;
             _stage = new PodiumStage();
 
+            _intro = Ui.Text(_screen, "", "center-text", "results-intro", "shadow");
+            _intro.pickingMode = PickingMode.Ignore;
+
             _tooltip = Ui.El(_screen, "tooltip");
             _tooltip.pickingMode = PickingMode.Ignore;
             _tooltipTitle = Ui.Text(_tooltip, "", "tooltip-title");
@@ -84,8 +89,9 @@ namespace RocketWars.UI
             Ui.Show(_screen, mode != Mode.Hidden);
             Ui.Show(_buttons, mode == Mode.Final);
             Ui.Show(_rating, mode == Mode.Final);
-            Ui.Show(_podium, mode == Mode.Final);
             _stage.SetActive(mode == Mode.Final);
+            _introEnd = mode == Mode.Final ? Time.unscaledTime + IntroTime : 0f;
+            UpdateIntro();
             _screen.EnableInClassList("results-final", mode == Mode.Final);
             _screen.pickingMode = mode == Mode.Final ? PickingMode.Position : PickingMode.Ignore;
             _title.text = Loc.T(mode == Mode.Final ? "ИТОГИ МАТЧА" : "ТЕКУЩИЙ СЧЁТ");
@@ -100,6 +106,7 @@ namespace RocketWars.UI
             if (_mode == Mode.Hidden)
                 return;
 
+            UpdateIntro();
             var m = MatchManager.Instance;
             Ui.Show(_newMatch, m != null && m.IsSpawned && m.IsServer && m.CanStartMatch);
             if (_mode == Mode.Final)
@@ -110,6 +117,28 @@ namespace RocketWars.UI
                 return;
             _nextRebuild = Time.unscaledTime + RebuildInterval;
             Rebuild();
+        }
+
+        /// <summary>Первые IntroTime секунд итогов — только надпись о победителе, таблица и пьедестал скрыты.</summary>
+        void UpdateIntro()
+        {
+            int winner = Winner();
+            bool intro = _mode == Mode.Final && winner >= 0 && Time.unscaledTime < _introEnd;
+            if (intro)
+            {
+                _intro.text = Loc.F("ПОБЕДИЛИ {0}", RuntimeMaterials.TeamName(winner));
+                _intro.style.color = RuntimeMaterials.TeamColor(winner);
+            }
+            Ui.Show(_intro, intro);
+            Ui.Show(_panel, !intro);
+            Ui.Show(_podium, _mode == Mode.Final && !intro);
+        }
+
+        /// <summary>Команда-победитель матча или -1, пока матч не закончен.</summary>
+        static int Winner()
+        {
+            var m = MatchManager.Instance;
+            return m != null && m.IsSpawned && m.Phase == MatchPhase.MatchEnd ? m.State.Winner : -1;
         }
 
         void Rebuild()
@@ -131,7 +160,7 @@ namespace RocketWars.UI
             }
             var m = MatchManager.Instance;
             if (m != null && m.IsSpawned)
-                sig.Append((int)m.State.Score0).Append((int)m.State.Score1);
+                sig.Append((int)m.State.Score0).Append((int)m.State.Score1).Append(Winner());
             if (sig.ToString() == _signature)
                 return;
             _signature = sig.ToString();
@@ -141,9 +170,20 @@ namespace RocketWars.UI
 
             ulong myId = NetworkPlayer.LocalPlayer != null ? NetworkPlayer.LocalPlayer.NetworkObjectId : ulong.MaxValue;
             var match = MatchManager.Instance;
+            int winner = Winner();
             for (int team = 0; team < 2; team++)
             {
                 var col = Ui.El(_columns, "results-team");
+                if (team == winner)
+                {
+                    // колонка победителей — в рамке цвета команды, над названием плашка «ПОБЕДИТЕЛИ»
+                    var color = RuntimeMaterials.TeamColor(team);
+                    col.AddToClassList("results-team--winner");
+                    col.style.borderTopColor = col.style.borderBottomColor = col.style.borderLeftColor = col.style.borderRightColor = color;
+                    var tag = Ui.Text(col, Loc.T("ПОБЕДИТЕЛИ"), "results-winner-tag", "shadow");
+                    tag.style.backgroundColor = color;
+                    tag.pickingMode = PickingMode.Ignore;
+                }
                 string score = match != null && match.IsSpawned ? $"  {match.State.Score(team)}" : "";
                 var title = Ui.Text(col, RuntimeMaterials.TeamName(team) + score, "results-team-title", "shadow", team == 0 ? "team0" : "team1");
                 title.pickingMode = PickingMode.Ignore;

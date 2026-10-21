@@ -77,7 +77,7 @@ namespace RocketWars.Player
             if (want != IsUp)
             {
                 IsUp = want;
-                Sfx.PlayAt(Sfx.Click, transform.position + Vector3.up * 1.7f, 0.35f, 10f, want ? 0.55f : 0.45f);
+                Sfx.PlayAt(want ? Sfx.BinocularOn : Sfx.BinocularOff, transform.position + Vector3.up * 1.7f, 0.6f, 10f);
             }
             _net.LocalBinoculars = IsUp && !IsScope;
             _net.LocalSniperAim = IsUp && IsScope;

@@ -28,7 +28,11 @@ namespace RocketWars.UI
 
         public static Button Btn(VisualElement parent, string text, Action onClick, params string[] classes)
         {
-            var b = new Button(onClick) { text = text };
+            var b = new Button(() =>
+            {
+                Sfx.Play2D(Sfx.UiClick, 0.6f);
+                onClick?.Invoke();
+            }) { text = text };
             b.AddToClassList("btn");
             foreach (var c in classes)
                 b.AddToClassList(c);

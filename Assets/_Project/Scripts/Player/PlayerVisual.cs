@@ -30,6 +30,7 @@ namespace RocketWars.Player
         /// <summary>Покачивание каски при ходьбе: наклон вперёд-назад и вбок (градусы), подпрыгивание (м).</summary>
         const float HelmetNod = 9f, HelmetRoll = 7f, HelmetBob = 0.03f;
         float _hands, _canopy;
+        bool _chuteOpen;
         static readonly Quaternion HandsUpL = Quaternion.Euler(180f, 0f, -12f), HandsUpR = Quaternion.Euler(180f, 0f, 12f);
         NetworkPlayer _net;
         float _raise, _shotPose;
@@ -465,9 +466,14 @@ namespace RocketWars.Player
             }
         }
 
-        /// <summary>Купол раскрывается за ~0.4 с и так же сворачивается.</summary>
+        /// <summary>Купол раскрывается за ~0.4 с и так же сворачивается; раскрытие и сброс слышны рядом.</summary>
         void UpdateParachute(bool open, float dt)
         {
+            if (open != _chuteOpen)
+            {
+                _chuteOpen = open;
+                Sfx.PlayAt(open ? Sfx.ParachuteOpen : Sfx.ParachuteDrop, transform.position + Vector3.up * 2f, 0.8f, 50f);
+            }
             _canopy = Mathf.MoveTowards(_canopy, open ? 1f : 0f, dt * 2.5f);
             bool visible = _canopy > 0.001f;
             if (_parachute.gameObject.activeSelf != visible)

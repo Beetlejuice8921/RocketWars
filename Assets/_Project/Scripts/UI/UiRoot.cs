@@ -137,6 +137,8 @@ namespace RocketWars.UI
         {
             if (open && !_pauseOpen)
                 _pauseOpenedAt = Time.unscaledTime;
+            if (open != _pauseOpen)
+                Sfx.Play2D(open ? Sfx.PauseOn : Sfx.PauseOff, 0.7f);
             _pauseOpen = open;
         }
 
