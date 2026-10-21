@@ -42,6 +42,7 @@ namespace RocketWars.Launcher
                     used.Add(p);
                     silos.Add(RocketSilo.Create(island,island.BlockToWorld(x + 0.5f, top, z + 0.5f), island.transform.parent));
                     island.ClearGrass(x - 1, z - 1, x + 1, z + 1); // трава не прорастает сквозь плиту шахты
+                    island.BlockSpawn(x - 2, z - 2, x + 2, z + 2); // и игрок не появляется внутри башни
                 }
             }
 

@@ -31,6 +31,7 @@ namespace RocketWars.Loot
             {
                 crates.Add(LootCrate.Create(island, spot.X, spot.Z, spot.Kind, spot.YawStep * 90f, parent));
                 island.ClearGrass(spot.X, spot.Z, spot.X, spot.Z); // и сквозь дно ящика
+                island.BlockSpawn(spot.X - 1, spot.Z - 1, spot.X + 1, spot.Z + 1);
             }
             return crates;
         }

@@ -21,9 +21,10 @@ mergeInto(LibraryManager.library, {
     var done = function (lang, name, prefs, start, auth) {
       if (rw.ready) return;
       rw.ready = true;
-      // winToggle — площадка даёт переключать «во весь экран / в окне» (Telegram на компьютере)
+      // winToggle — площадка даёт переключать «во весь экран / в окне» (Telegram на компьютере);
+      // ctrlKeys — игра не в браузере, Ctrl+W и прочие сочетания вкладку не закроют (приложение Telegram на компьютере)
       send('OnInit', JSON.stringify({ lang: lang || '', name: name || '', prefs: prefs || '', start: start || '', auth: auth || '',
-        winToggle: !!rw.winToggle, windowed: !!(rw.winToggle && !rw.tg.isFullscreen) }));
+        winToggle: !!rw.winToggle, windowed: !!(rw.winToggle && !rw.tg.isFullscreen), ctrlKeys: !!rw.ctrlKeys }));
     };
 
     if (platform === 'yandex' && typeof YaGames !== 'undefined') {
@@ -73,6 +74,8 @@ mergeInto(LibraryManager.library, {
       var tgName = tgUser.first_name || tgUser.username || '';
       // https://t.me/<бот>/<app>?startapp=<параметр> — Telegram передаёт его сюда
       var tgStart = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) || '';
+      // приложение Telegram на компьютере (Windows/Linux, macOS, Unigram), а не web.telegram.org в браузере
+      rw.ctrlKeys = tg.platform === 'tdesktop' || tg.platform === 'macos' || tg.platform === 'unigram';
       // Telegram свёрнут / переключились на другой чат (Bot API 8.0)
       if (tg.isVersionAtLeast('8.0')) {
         tg.onEvent('deactivated', function () { send('OnPause', 'sdk'); });

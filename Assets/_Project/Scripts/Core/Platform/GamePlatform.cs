@@ -56,6 +56,12 @@ namespace RocketWars.Core
         /// </summary>
         public string NetGroup => IsWeb ? "web" : "pc";
 
+        /// <summary>
+        /// Ctrl можно назначать на действия: ПК-сборка и приложение Telegram на компьютере. В браузере сочетания
+        /// с Ctrl (Ctrl+W, Ctrl+R…) перехватывает сам браузер.
+        /// </summary>
+        public virtual bool AllowsCtrl => !IsWeb;
+
         /// <summary>Системные шрифты ОС (деванагари для хинди есть только в Windows-шрифте Nirmala UI).</summary>
         public virtual bool HasSystemFonts => !IsWeb;
 

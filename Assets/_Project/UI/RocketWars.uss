@@ -309,14 +309,23 @@
     padding: 4px 14px 14px 14px;
 }
 
+/* текст окна — на 20% крупнее обычного: заголовок 35 → 42, кнопка 12 → 14.4 */
+.howto-panel .title {
+    font-size: 42px;
+}
+
+.howto-panel .btn {
+    font-size: 14.4px;
+}
+
 .howto-heading {
-    font-size: 13px;
+    font-size: 15.6px;
     color: rgb(120, 210, 140);
     margin-top: 14px;
 }
 
 .howto-text {
-    font-size: 12px;
+    font-size: 14.4px;
     white-space: normal;
     color: rgb(225, 230, 238);
 }

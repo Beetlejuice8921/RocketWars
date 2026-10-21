@@ -46,6 +46,8 @@ namespace RocketWars.Terrain
         byte[] _surface;
         /// <summary>Столбцы, где трава не нужна: под шахтами и ящиками (иначе она прорастает сквозь них).</summary>
         bool[] _noGrass;
+        /// <summary>Столбцы, где нельзя появляться: под шахтами и ящиками и вплотную к ним (иначе спавн внутри).</summary>
+        bool[] _noSpawn;
         /// <summary>Площадка флага: верхние кубики — камень, а сами столбцы неразрушимы (флаг стоит всегда).</summary>
         readonly HashSet<int> _flagStone = new HashSet<int>();
         readonly HashSet<int> _unbreakable = new HashSet<int>();
@@ -82,6 +84,7 @@ namespace RocketWars.Terrain
             _hp = new byte[Width * Depth * MaxHeight];
             _surface = new byte[Width * Depth];
             _noGrass = new bool[Width * Depth];
+            _noSpawn = new bool[Width * Depth];
             for (int x = 0; x < Width; x++)
             for (int z = 0; z < Depth; z++)
             {
@@ -210,6 +213,14 @@ namespace RocketWars.Terrain
             }
         }
 
+        /// <summary>Запретить спавн в прямоугольнике столбцов (включительно) — на постройках и рядом с ними.</summary>
+        public void BlockSpawn(int x0, int z0, int x1, int z1)
+        {
+            for (int x = Mathf.Max(0, x0); x <= Mathf.Min(Width - 1, x1); x++)
+            for (int z = Mathf.Max(0, z0); z <= Mathf.Min(Depth - 1, z1); z++)
+                _noSpawn[x + Width * z] = true;
+        }
+
         /// <summary>Контрольная сумма HP всех кубиков — для проверки, что у клиентов тот же террейн.</summary>
         public int ComputeChecksum()
         {
@@ -245,7 +256,8 @@ namespace RocketWars.Terrain
         public Bounds WorldBounds => new Bounds(Center + Vector3.up * MaxHeight * 0.5f, new Vector3(Width, MaxHeight, Depth));
 
         /// <summary>
-        /// Случайная точка над островом: столбец, у которого есть все 8 соседей (не на самом краю).
+        /// Случайная точка над островом: столбец, у которого есть все 8 соседей (не на самом краю),
+        /// не под шахтой или ящиком и не вплотную к ним.
         /// </summary>
         public Vector3 GetRandomSpawnPoint(float heightAbove)
         {
@@ -254,7 +266,7 @@ namespace RocketWars.Terrain
                 int x = UnityEngine.Random.Range(1, Width - 1);
                 int z = UnityEngine.Random.Range(1, Depth - 1);
                 int top = GetTopHeight(x, z);
-                if (top == 0 || !HasAllNeighbours(x, z))
+                if (top == 0 || _noSpawn[x + Width * z] || !HasAllNeighbours(x, z))
                     continue;
                 return BlockToWorld(x + 0.5f, top + heightAbove, z + 0.5f);
             }

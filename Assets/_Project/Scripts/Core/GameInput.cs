@@ -27,9 +27,15 @@ namespace RocketWars.Core
         static readonly int[] Defaults =
         {
             (int)Key.W, (int)Key.S, (int)Key.A, (int)Key.D, (int)Key.Space, (int)Key.LeftShift,
-            GamePlatform.Current.IsWeb ? (int)Key.C : (int)Key.LeftCtrl, // в браузере Ctrl+W закрывает вкладку
+            (int)Key.LeftCtrl, // в браузере — C (см. Default): Ctrl+W закрывает вкладку
             (int)Key.E, (int)Key.Q, MouseLeft, MouseRight
         };
+
+        /// <summary>Клавиша по умолчанию. AllowsCtrl у веб-площадки известен только после ответа SDK — поэтому не в массиве.</summary>
+        static int Default(int index) =>
+            index == (int)GameAction.Crouch && !GamePlatform.Current.AllowsCtrl ? (int)Key.C : Defaults[index];
+
+        static bool IsCtrl(int code) => code == (int)Key.LeftCtrl || code == (int)Key.RightCtrl;
 
         /// <summary>Названия действий — ключи Loc.</summary>
         static readonly string[] Names =
@@ -53,7 +59,12 @@ namespace RocketWars.Core
                 {
                     _binds = new int[Defaults.Length];
                     for (int i = 0; i < _binds.Length; i++)
-                        _binds[i] = PlayerPrefs.GetInt(BindPrefix + (GameAction)i, Defaults[i]);
+                    {
+                        _binds[i] = PlayerPrefs.GetInt(BindPrefix + (GameAction)i, Default(i));
+                        // Ctrl, назначенный в приложении Telegram, пришёл из облака в браузер — там он не работает
+                        if (IsCtrl(_binds[i]) && !GamePlatform.Current.AllowsCtrl)
+                            _binds[i] = Default(i);
+                    }
                 }
                 return _binds;
             }
@@ -132,7 +143,7 @@ namespace RocketWars.Core
         public static void ResetAll()
         {
             for (int i = 0; i < Defaults.Length; i++)
-                Save(i, Defaults[i]);
+                Save(i, Default(i));
             Sensitivity = 1f;
             PlayerPrefs.Save();
         }
@@ -145,8 +156,9 @@ namespace RocketWars.Core
 
         /// <summary>Esc, Tab и Enter заняты интерфейсом (пауза, итоги, старт матча).</summary>
         public static bool IsReserved(Key key) => key == Key.Escape || key == Key.Tab || key == Key.Enter || key == Key.NumpadEnter
-            // в браузере сочетания с Ctrl/Cmd (Ctrl+W, Ctrl+R…) перехватывает сам браузер
-            || GamePlatform.Current.IsWeb && (key == Key.LeftCtrl || key == Key.RightCtrl || key == Key.LeftMeta || key == Key.RightMeta);
+            // в браузере сочетания с Ctrl/Cmd (Ctrl+W, Ctrl+R…) перехватывает сам браузер; Ctrl — можно в приложении Telegram
+            || !GamePlatform.Current.AllowsCtrl && (key == Key.LeftCtrl || key == Key.RightCtrl)
+            || GamePlatform.Current.IsWeb && (key == Key.LeftMeta || key == Key.RightMeta);
 
         /// <summary>Первая нажатая в этом кадре клавиша или кнопка мыши (для переназначения).</summary>
         public static bool TryCapture(out int code)

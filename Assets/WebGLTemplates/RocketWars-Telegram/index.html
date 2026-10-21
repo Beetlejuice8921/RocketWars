@@ -80,6 +80,9 @@
       // пробел, Tab (таблица счёта) и стрелки не должны прокручивать страницу
       window.addEventListener("keydown", function (e) {
         if (["Space", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) >= 0) e.preventDefault();
+        // приложение Telegram на компьютере: Ctrl — «присесть», сочетания вида Ctrl+W/S/F (бег сидя) не отдаём WebView;
+        // копировать/вставить/вырезать оставляем для полей ввода
+        else if (e.ctrlKey && window.RWPlatform && RWPlatform.ctrlKeys && ["KeyC", "KeyV", "KeyX"].indexOf(e.code) < 0) e.preventDefault();
       });
       canvas.addEventListener("pointerdown", function () { canvas.focus(); });
 

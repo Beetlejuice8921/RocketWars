@@ -46,7 +46,7 @@ namespace RocketWars.Core
         string _cloudSaved;
         string _accountName, _inviteCode, _authData;
         bool _initialized, _readyPending;
-        bool _canToggleWindowed, _windowed;
+        bool _canToggleWindowed, _windowed, _allowsCtrl;
         Action<bool> _adClosed;
 
         public WebPlatform(string id)
@@ -87,6 +87,8 @@ namespace RocketWars.Core
                 return;
             RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
         }
+
+        public override bool AllowsCtrl => _allowsCtrl;
 
         public override bool CanToggleWindowed => _canToggleWindowed;
 
@@ -163,7 +165,10 @@ namespace RocketWars.Core
             _authData = data.auth;
             _canToggleWindowed = data.winToggle;
             _windowed = data.windowed;
+            _allowsCtrl = data.ctrlKeys;
             _initialized = true;
+            // клавиши по умолчанию зависят от AllowsCtrl (присесть — Ctrl или C), а могли уже прочитаться в кэш
+            GameInput.ReloadSaved();
             Debug.Log($"[RocketWars] platform {_id}: lang '{data.lang}', name '{_accountName}', start '{data.start}', cloud prefs {data.prefs?.Length ?? 0} chars");
             if (UsesCloudPrefs)
             {
@@ -305,6 +310,7 @@ namespace RocketWars.Core
             public string auth; // Telegram: initData целиком (подпись проверяет сервер рейтинга)
             public bool winToggle; // Telegram на компьютере: можно переключать «во весь экран / в окне»
             public bool windowed;
+            public bool ctrlKeys; // приложение Telegram на компьютере: Ctrl можно назначать на действия
         }
 
         [Serializable]
