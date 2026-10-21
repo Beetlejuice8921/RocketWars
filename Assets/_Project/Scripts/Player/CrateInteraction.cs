@@ -25,11 +25,15 @@ namespace RocketWars.Player
         ReviveInteraction _revive;
         bool _needRelease;
         LootCrate _holdTarget;
+        AudioSource _pryAudio;
 
         void Awake()
         {
             _health = GetComponent<PlayerHealth>();
             _net = GetComponent<NetworkPlayer>();
+            _pryAudio = Sfx.Configure(gameObject.AddComponent<AudioSource>(), 20f);
+            _pryAudio.spatialBlend = 0f;
+            _pryAudio.volume = 0.8f;
         }
 
         void OnEnable()
@@ -50,7 +54,7 @@ namespace RocketWars.Player
         {
             if (IsOpening)
                 _needRelease = true;
-            Progress = 0f;
+            StopPry();
         }
 
         /// <summary>Взятый предмет: броня, базука и снайперка — свои звуки, остальное — щелчок «взял»; аптечки остаются в ящике.</summary>
@@ -82,7 +86,7 @@ namespace RocketWars.Player
             SetTarget(busy ? null : FindTarget());
             if (Target == null)
             {
-                Progress = 0f;
+                StopPry();
                 return;
             }
 
@@ -90,7 +94,7 @@ namespace RocketWars.Player
             {
                 if (!held || _needRelease)
                 {
-                    Progress = 0f;
+                    StopPry();
                 }
                 else
                 {
@@ -100,12 +104,14 @@ namespace RocketWars.Player
                         Progress = 0f;
                         _holdTarget = Target;
                         _net.BeginHold(HoldKind.Crate, (ulong)Target.NetIndex);
+                        _pryAudio.clip = Sfx.CratePry;
+                        _pryAudio.Play();
                     }
                     Progress += Time.deltaTime;
                     if (Progress >= LootCrate.OpenTime)
                     {
                         _net.OpenCrate(Target);
-                        Progress = 0f;
+                        Progress = 0f; // звук вскрытия доигрывает до конца
                         _needRelease = true; // предмет из только что открытого ящика — отдельным нажатием
                     }
                 }
@@ -120,12 +126,20 @@ namespace RocketWars.Player
             }
         }
 
+        /// <summary>Удержание сорвалось — сбросить прогресс и оборвать звук вскрытия.</summary>
+        void StopPry()
+        {
+            if (Progress > 0f)
+                _pryAudio.Stop();
+            Progress = 0f;
+        }
+
         void SetTarget(LootCrate crate)
         {
             if (Target == crate)
                 return;
             Target = crate;
-            Progress = 0f;
+            StopPry();
         }
 
         /// <summary>Ближайший ящик рядом: закрытый — открыть, открытый — только если в нём что-то осталось.</summary>

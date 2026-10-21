@@ -139,6 +139,8 @@ namespace RocketWars.Core
 
         /// <summary>Открылась крышка ящика (3D).</summary>
         public static AudioClip CrateOpen => Get(nameof(CrateOpen));
+        /// <summary>Вскрытие ящика — пока держит E (2D, слышит вскрывающий; обрывается, если удержание сорвалось).</summary>
+        public static AudioClip CratePry => Get(nameof(CratePry));
         /// <summary>Использована аптечка (3D).</summary>
         public static AudioClip Heal => Get(nameof(Heal));
         /// <summary>Надел бронежилет из ящика (2D, слышит взявший).</summary>
