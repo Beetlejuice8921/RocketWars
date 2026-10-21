@@ -344,13 +344,14 @@ namespace RocketWars.UI
 
             string banner = "", sub = "", countdown = "";
             Color bannerColor = Color.white;
+            bool lobby = hasMatch && s.Phase == MatchPhase.Lobby, blink = false;
             if (hasMatch)
             {
                 switch (s.Phase)
                 {
                     case MatchPhase.Lobby:
                         banner = Loc.T("РАЗМИНКА");
-                        sub = LobbyText(match);
+                        sub = LobbyText(match, out blink);
                         break;
                     case MatchPhase.Countdown:
                         int left = Mathf.Max(1, Mathf.CeilToInt((float)(s.PhaseEnd - NetClock.Now)));
@@ -380,22 +381,23 @@ namespace RocketWars.UI
             _banner.text = banner;
             _banner.style.color = bannerColor;
             _subbanner.text = sub;
+            _subbanner.EnableInClassList("subbanner-lobby", lobby);
+            // «Enter — начать матч» мигает: 0.5 с видно, 0.5 с почти погасло
+            _subbanner.style.opacity = blink && Time.unscaledTime % 1f >= 0.5f ? 0.15f : 1f;
             _countdown.text = countdown;
         }
 
-        static string LobbyText(MatchManager match)
+        /// <summary>Подсказка разминки; blink — это призыв к хосту начать матч (мигает).</summary>
+        static string LobbyText(MatchManager match, out bool blink)
         {
-            int n0 = 0, n1 = 0;
-            foreach (var p in PlayerHealth.All)
-                if (p.IsSpawned)
-                {
-                    if (p.Team == 0) n0++;
-                    else n1++;
-                }
-            string teams = $"{RuntimeMaterials.TeamName(0)}: {n0}   ·   {RuntimeMaterials.TeamName(1)}: {n1}";
+            blink = false;
             if (!match.IsServer)
-                return $"{teams}\n{Loc.T("Матч начнёт хост")}";
-            return $"{teams}\n{match.StartBlocker() ?? Loc.T(TouchInput.Enabled ? "[СТАРТ] — начать матч" : "Enter — начать матч")}";
+                return Loc.T("Матч начнёт хост");
+            string blocker = match.StartBlocker();
+            if (blocker != null)
+                return blocker;
+            blink = true;
+            return Loc.T(TouchInput.Enabled ? "[СТАРТ] — начать матч" : "Enter — начать матч");
         }
 
         void UpdatePlayer(NetworkPlayer me, PlayerHealth health)
@@ -486,27 +488,19 @@ namespace RocketWars.UI
                 return;
             }
 
-            int ready = 0, reloading = 0, alivesilos = 0;
-            float nextReload = float.MaxValue;
+            int ready = 0, alivesilos = 0;
             foreach (var silo in RocketSilo.All)
             {
                 if (silo.Team != health.Team || silo.State == SiloState.Destroyed)
                     continue;
                 alivesilos++;
                 if (silo.State == SiloState.Ready) ready++;
-                if (silo.State == SiloState.Reloading)
-                {
-                    reloading++;
-                    nextReload = Mathf.Min(nextReload, silo.ReloadLeft);
-                }
             }
-            int next = reloading > 0 ? Mathf.CeilToInt(nextReload) : 0;
-            if (_infoKey.Changed((uint)health.Team | (long)alivesilos << 8 | (long)ready << 16 | (long)reloading << 24 | (long)next << 32))
+            if (_infoKey.Changed((uint)health.Team | (long)alivesilos << 8 | (long)ready << 16))
             {
-                string reload = reloading > 0 ? Loc.F(" · перезарядка: {0} (ближайшая {1} с)", reloading, next) : "";
                 _info.text = Loc.F("Команда: {0}", RuntimeMaterials.TeamName(health.Team)) + "\n" +
-                             Loc.F("Шахт: {0} · готово: {1}", alivesilos, ready) + reload +
-                             (TouchInput.Enabled ? "" : "\n" + Loc.T("Tab — итоги · Esc — пауза")); // на телефоне — кнопки «II» и «СЧЁТ»
+                             Loc.F("Шахт: {0} · готово: {1}", alivesilos, ready) +
+                             (TouchInput.Enabled ? "" : "\n" + Loc.T("Tab — итоги") + "\n" + Loc.T("Esc — пауза")); // на телефоне — кнопки «II» и «СЧЁТ»
             }
         }
 

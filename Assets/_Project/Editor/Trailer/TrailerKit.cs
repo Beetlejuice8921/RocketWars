@@ -45,8 +45,9 @@ namespace RocketWars.EditorTools.Trailer
                 int have = PlayerHealth.All.Count(p => p.Team == team);
                 for (int i = have; i < perTeam; i++)
                 {
+                    var role = BotBrain.PickRole(team);
                     var bot = (PlayerHealth)create.Invoke(Net, new object[] { team, $"Бот {team * 10 + i + 1}", true });
-                    bot.gameObject.AddComponent<BotBrain>();
+                    bot.gameObject.AddComponent<BotBrain>().Role = role;
                     bot.NetworkObject.Spawn(true);
                     added++;
                 }

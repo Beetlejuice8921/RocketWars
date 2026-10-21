@@ -33,9 +33,9 @@ namespace RocketWars.Player
         /// <summary>От подошв (pivot тела) до низа бёдер сидящего: тело опускаем так, чтобы бёдра легли на корпус.</summary>
         public const float HipLift = 0.72f;
         /// <summary>Глаза сидящего относительно сиденья (в осях тела).</summary>
-        static readonly Vector3 SeatEye = new Vector3(0f, 1.75f - HipLift, 0.1f);
+        public static readonly Vector3 SeatEye = new Vector3(0f, 1.75f - HipLift, 0.1f);
         /// <summary>Капсула игрока — над сиденьем, вне стоящей (твёрдой) ракеты: спрыгнул — и не застрял в корпусе.</summary>
-        const float RootOut = 0.45f;
+        public const float RootOut = 0.45f;
 
         public bool IsRiding => _siloIndex >= 0;
         /// <summary>Ракета уже летит (можно делать трюки).</summary>
@@ -226,12 +226,12 @@ namespace RocketWars.Player
             }
 
             HasGrabTarget = silo >= 0;
-            TargetFull = HasGrabTarget && FreeSlot(silo) < 0;
+            TargetFull = HasGrabTarget && FreeSlot(silo, _health) < 0;
         }
 
         void Grab(int silo, Rocket rocket)
         {
-            int slot = FreeSlot(silo);
+            int slot = FreeSlot(silo, _health);
             if (slot < 0)
                 return;
             _siloIndex = silo;
@@ -256,12 +256,12 @@ namespace RocketWars.Player
         }
 
         /// <summary>Первый свободный слот на ракете этой шахты (по сетевым флагам других игроков) или −1.</summary>
-        int FreeSlot(int silo)
+        public static int FreeSlot(int silo, PlayerHealth self)
         {
             int used = 0;
             foreach (var p in PlayerHealth.All)
             {
-                if (p == _health || !p.TryGetComponent(out NetworkPlayer np) || np.RideSilo != silo)
+                if (p == self || !p.TryGetComponent(out NetworkPlayer np) || np.RideSilo != silo)
                     continue;
                 used |= 1 << np.RideSlot;
             }
@@ -271,7 +271,7 @@ namespace RocketWars.Player
             return -1;
         }
 
-        static Rocket FindRocketFromSilo(int silo)
+        public static Rocket FindRocketFromSilo(int silo)
         {
             foreach (var r in Rocket.Active)
                 if (r.SiloIndex == silo)

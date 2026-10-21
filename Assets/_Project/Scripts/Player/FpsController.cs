@@ -77,6 +77,8 @@ namespace RocketWars.Player
         /// <summary>Ввод бота: направление движения в мировых осях (длина ≤ 1) и бег.</summary>
         public Vector3 BotMove { get; set; }
         public bool BotSprint { get; set; }
+        /// <summary>Бот: присесть.</summary>
+        public bool BotCrouch { get; set; }
         bool _botJump;
         /// <summary>Бот: прыгнуть (если стоит на земле).</summary>
         public void BotJump() => _botJump = true;
@@ -174,8 +176,8 @@ namespace RocketWars.Player
             else if (!IsLocal && !downed && !MovementLocked)
             {
                 move = Vector3.ClampMagnitude(new Vector3(BotMove.x, 0f, BotMove.z), 1f);
-                speed = ParachuteOpen ? _parachuteSteerSpeed : BotSprint ? _sprintSpeed : _walkSpeed;
-                if (_botJump && _cc.isGrounded)
+                speed = ParachuteOpen ? _parachuteSteerSpeed : IsCrouching ? _crouchSpeed : BotSprint ? _sprintSpeed : _walkSpeed;
+                if (_botJump && _cc.isGrounded && !IsCrouching)
                     _velocity.y = Mathf.Sqrt(2f * _jumpHeight * -_gravity);
             }
             _botJump = false;
@@ -380,7 +382,7 @@ namespace RocketWars.Player
             }
             else
             {
-                bool wantCrouch = !IsLocal && RemoteCrouch;
+                bool wantCrouch = !IsLocal && (RemoteCrouch || BotCrouch);
                 if (IsLocal && !MovementLocked)
                 {
                     wantCrouch = GameInput.IsPressed(GameAction.Crouch);

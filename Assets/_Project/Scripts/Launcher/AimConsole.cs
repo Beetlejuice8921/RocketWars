@@ -258,22 +258,22 @@ namespace RocketWars.Launcher
             switch (Silo.State)
             {
                 case SiloState.Ready when !MatchManager.ConsolesEnabled:
-                    SetStatus("WAITING", new Color(0.45f, 0.45f, 0.5f));
+                    SetStatus(Loc.TConsole("ОЖИДАНИЕ"), new Color(0.45f, 0.45f, 0.5f));
                     break;
                 case SiloState.Ready when IsLockedFor(NetClock.LocalClientId):
-                    SetStatus("BUSY", new Color(0.3f, 0.45f, 0.9f));
+                    SetStatus(Loc.TConsole("ЗАНЯТО"), new Color(0.3f, 0.45f, 0.9f));
                     break;
                 case SiloState.Ready:
-                    SetStatus(CanLaunch ? "READY — LAUNCH!" : "READY", new Color(0.1f, 0.85f, 0.1f));
+                    SetStatus(CanLaunch ? Loc.TConsole("ГОТОВО — ПУСК!") : Loc.TConsole("ГОТОВО"), new Color(0.1f, 0.85f, 0.1f));
                     break;
                 case SiloState.Launching:
-                    SetStatus("LAUNCH!", Mathf.Repeat(Time.time, 0.5f) < 0.25f ? LaunchColor : new Color(0.5f, 0.05f, 0.05f));
+                    SetStatus(Loc.TConsole("ПУСК!"), Mathf.Repeat(Time.time, 0.5f) < 0.25f ? LaunchColor : new Color(0.5f, 0.05f, 0.05f));
                     break;
                 case SiloState.Reloading:
-                    SetStatus($"IN PROGRESS… {Mathf.CeilToInt(Silo.ReloadLeft)}", new Color(0.95f, 0.55f, 0.1f));
+                    SetStatus(Loc.TConsoleF("ПЕРЕЗАРЯДКА… {0}", Mathf.CeilToInt(Silo.ReloadLeft)), new Color(0.95f, 0.55f, 0.1f));
                     break;
                 default:
-                    SetStatus("DESTROYED", new Color(0.15f, 0.15f, 0.15f));
+                    SetStatus(Loc.TConsole("УНИЧТОЖЕНА"), new Color(0.15f, 0.15f, 0.15f));
                     break;
             }
 
@@ -365,14 +365,17 @@ namespace RocketWars.Launcher
 
         public static AimConsole Create(RocketSilo silo)
         {
-            // стойка с экраном в 2.4 м от центра шахты, экран смотрит наружу
+            // стойка с экраном в 2.4 м от центра шахты, экран смотрит наружу — с той стороны, где перед пультом ровно
+            var (dir, baseY, poleBottom) = PickSide(silo);
             var root = new GameObject("AimConsole");
             root.transform.SetParent(silo.transform, false);
-            root.transform.localPosition = new Vector3(2.4f, 0f, 0f);
-            root.transform.localRotation = Quaternion.LookRotation(Vector3.left);
+            root.transform.localPosition = dir * 2.4f + Vector3.up * baseY;
+            root.transform.localRotation = Quaternion.LookRotation(-dir);
 
+            // стойка уходит до земли под ней (пульт подняли к игроку на кубике — снизу не висит в воздухе)
             var gray = new Color(0.75f, 0.75f, 0.75f);
-            RuntimeMaterials.VisualPrimitive(PrimitiveType.Cube, root.transform, new Vector3(0f, 0.6f, 0.15f), new Vector3(0.1f, 1.2f, 0.1f), gray);
+            float poleH = 1.2f - poleBottom;
+            RuntimeMaterials.VisualPrimitive(PrimitiveType.Cube, root.transform, new Vector3(0f, poleBottom + poleH * 0.5f, 0.15f), new Vector3(0.1f, poleH, 0.1f), gray);
 
             var head = new GameObject("Head").transform;
             head.SetParent(root.transform, false);
@@ -385,6 +388,55 @@ namespace RocketWars.Launcher
             console.Silo = silo;
             console.BuildCanvas(head);
             return console;
+        }
+
+        static readonly Vector2Int[] Sides = { new(1, 0), new(-1, 0), new(0, 1), new(0, -1) };
+
+        /// <summary>
+        /// Сторона шахты, где земля под стойкой и там, где стоит игрок, на уровне плиты: иначе игрок стоит на кубике
+        /// (приходится садиться) или под уступом (смотреть вверх). Считается по свежему острову из сида — у всех одинаково.
+        /// baseY — пульт по высоте земли под игроком, poleBottom — низ стойки (локально) до земли под ней.
+        /// </summary>
+        static (Vector3 dir, float baseY, float poleBottom) PickSide(RocketSilo silo)
+        {
+            var island = silo.Island;
+            Vector3 local = silo.transform.position - island.transform.position;
+            int cx = Mathf.FloorToInt(local.x), cz = Mathf.FloorToInt(local.z);
+            int top = Mathf.RoundToInt(local.y);
+
+            int best = 0;
+            float bestCost = float.MaxValue;
+            for (int i = 0; i < Sides.Length; i++)
+            {
+                var s = Sides[i];
+                var side = new Vector2Int(-s.y, s.x);
+                var stand = new Vector2Int(cx, cz) + s * 3;
+                float cost = i * 0.01f // при равенстве — прежняя сторона +X
+                    + StepCost(island, cx + s.x * 2, cz + s.y * 2, top) * 2f // под стойкой
+                    + StepCost(island, stand.x, stand.y, top) * 3f // где стоит игрок
+                    + StepCost(island, stand.x + side.x, stand.y + side.y, top) * 0.5f
+                    + StepCost(island, stand.x - side.x, stand.y - side.y, top) * 0.5f
+                    + StepCost(island, cx + s.x * 4, cz + s.y * 4, top); // подход
+                if (cost < bestCost)
+                {
+                    bestCost = cost;
+                    best = i;
+                }
+            }
+
+            var b = Sides[best];
+            int standH = island.GetTopHeight(cx + b.x * 3, cz + b.y * 3);
+            int poleH = island.GetTopHeight(cx + b.x * 2, cz + b.y * 2);
+            float baseY = standH > 0 ? Mathf.Clamp(standH - top, -1, 1) : 0f;
+            float poleBottom = poleH > 0 ? Mathf.Min(0f, poleH - top - baseY) : 0f;
+            return (new Vector3(b.x, 0f, b.y), baseY, poleBottom);
+        }
+
+        /// <summary>Перепад столбца относительно плиты; пустой столбец (край, обрыв) — хуже любого перепада.</summary>
+        static float StepCost(RocketWars.Terrain.VoxelIsland island, int x, int z, int top)
+        {
+            int h = island.GetTopHeight(x, z);
+            return h == 0 ? 6f : Mathf.Abs(h - top);
         }
 
         void BuildCanvas(Transform head)
@@ -404,7 +456,7 @@ namespace RocketWars.Launcher
 
             var statusRt = Rect(root, "Status", new Vector2(10, 288), new Vector2(380, 34));
             _statusBg = Img(statusRt, Color.green);
-            _status = Txt(statusRt, "READY", 16, Color.white); // размеры — под широкий пиксельный шрифт
+            _status = FitWidth(Txt(statusRt, "", 16, Color.white)); // размеры — под широкий пиксельный шрифт
 
             _mapArea = Rect(root, "MapArea", new Vector2(10, 92), new Vector2(380, 190));
             Img(_mapArea, new Color(0.45f, 0.45f, 0.47f));
@@ -437,7 +489,7 @@ namespace RocketWars.Launcher
             {
                 MakeButton(root, ConsoleButtonKind.X, new Vector2(10, 10), "—", "X", XColor),
                 MakeButton(root, ConsoleButtonKind.Y, new Vector2(140, 10), "|", "Y", YColor),
-                MakeButton(root, ConsoleButtonKind.Launch, new Vector2(270, 10), "▲", "LAUNCH", Color.black),
+                MakeButton(root, ConsoleButtonKind.Launch, new Vector2(270, 10), "▲", Loc.TConsole("ПУСК"), Color.black),
             };
 
             RefreshUi();

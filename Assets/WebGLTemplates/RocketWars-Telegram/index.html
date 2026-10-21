@@ -19,7 +19,11 @@
         if (tg.isVersionAtLeast("7.7")) tg.disableVerticalSwipes();
         // во весь экран (Bot API 8.0): на телефоне, и на десктопе — иначе Telegram открывает узкое вертикальное окно.
         // Не вышло (web-версия Telegram без жеста игрока) — событие fullscreenFailed, игра просто остаётся в окне
-        if (tg.isVersionAtLeast("8.0")) tg.requestFullscreen();
+        // На компьютере игрок может выбрать «Оконный режим» в опциях — тогда не разворачиваем (RW_SetFullscreen в RWPlatform.jslib)
+        var mobile = tg.platform === "android" || tg.platform === "android_x" || tg.platform === "ios";
+        var windowed = false;
+        try { windowed = !mobile && localStorage.getItem("rw_windowed") === "1"; } catch (e) { }
+        if (tg.isVersionAtLeast("8.0") && !windowed) tg.requestFullscreen();
       })();
     </script>
     <link rel="icon" type="image/png" href="favicon.png">

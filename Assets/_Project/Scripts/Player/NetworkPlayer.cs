@@ -68,6 +68,15 @@ namespace RocketWars.Player
         public bool LocalSniperAim { get; set; }
         public bool SniperAiming => IsSpawned && (IsLocalHuman ? LocalSniperAim : _sniperAim.Value);
 
+        /// <summary>Сервер: бот поднял/опустил бинокль или оптику снайперки (живому игроку их ставит Binoculars).</summary>
+        public void SetBotOptics(bool binoculars, bool sniperAim)
+        {
+            if (!IsBot || !IsOwner || !IsSpawned)
+                return;
+            if (_binoculars.Value != binoculars) _binoculars.Value = binoculars;
+            if (_sniperAim.Value != sniperAim) _sniperAim.Value = sniperAim;
+        }
+
         /// <summary>За ракету какой шахты держится игрок (−1 — ни за какую) и в каком из 4 слотов.</summary>
         readonly NetworkVariable<int> _rideSilo = new NetworkVariable<int>(-1,
             NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
@@ -289,6 +298,13 @@ namespace RocketWars.Player
 
             if (IsServer)
                 ServerUpdateBerserk();
+
+            if (IsOwner && IsBot)
+            {
+                // присед бота виден всем (у живого игрока его пишет ветка IsLocalHuman выше)
+                if (_crouch.Value != _fps.IsCrouching)
+                    _crouch.Value = _fps.IsCrouching;
+            }
 
             if (IsOwner)
             {

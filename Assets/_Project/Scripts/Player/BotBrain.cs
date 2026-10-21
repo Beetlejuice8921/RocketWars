@@ -1,54 +1,135 @@
 using System.Collections.Generic;
-using RocketWars.Combat;
 using RocketWars.Core;
+using RocketWars.Flags;
 using RocketWars.Launcher;
 using RocketWars.Loot;
+using RocketWars.Net;
 using RocketWars.Terrain;
 using UnityEngine;
 
 namespace RocketWars.Player
 {
+    /// <summary>Характер бота: меняет только то, чем он охотнее занимается, а не меткость и реакцию.</summary>
+    public enum BotRole : byte
+    {
+        /// <summary>Чаще всех у пульта, держится возле шахты, любит снайперку.</summary>
+        Artillery,
+        /// <summary>Летает на ракетах, носит флаг, лезет на чужой остров, любит базуку.</summary>
+        Assault,
+        /// <summary>Держится рядом с союзниками и первым бежит поднимать.</summary>
+        Medic,
+        /// <summary>Собирает ящики, берёт любое оружие, обстреливает шахты из базуки.</summary>
+        Scavenger
+    }
+
     /// <summary>
-    /// Поведение бота-балансира (только на сервере, бот принадлежит серверу). Приоритет от высокого к низкому:
-    /// 1) стреляет по врагу, которого видит на своём острове (каждый выстрел попадает с шансом 30%);
-    /// 2) убегает из зоны падения ракеты;
-    /// 3) поднимает лежащих союзников (держит «E» 3 с, урон сбивает);
-    /// 4) открывает ящики своего острова, из добычи берёт только пулемёт и лечится аптечками;
-    /// 5) патрулирует остров.
-    /// Стрельба занимает только «руки»: ноги в бою продолжают уклоняться от ракет, остальные дела ждут.
-    /// Действия идут через те же запросы NetworkPlayer, что и у живого игрока, — сервер проверяет их так же.
+    /// Поведение бота-балансира (только на сервере, бот принадлежит серверу).
+    /// «Руки» и «ноги» работают раздельно: руки стреляют по видимому врагу, ноги уклоняются от ракет,
+    /// а остальное время бот занят одним делом. Дело выбирается раз в 1–2,5 с по очкам полезности:
+    /// ситуация × вес характера (<see cref="BotRole"/>) × немного случайности, текущее дело получает надбавку,
+    /// чтобы бот не метался. Дела: поднять союзника, ящик, пульт шахты (пуск по врагу, иногда — с полётом верхом),
+    /// флаг (забрать, увезти домой на вражеской ракете), охота на врага на своём острове, обстрел шахты из базуки,
+    /// держаться рядом с союзником, осмотреться в бинокль, патруль.
+    /// Меткость у всех характеров одна (30%); действия идут через те же запросы NetworkPlayer, что и у живого игрока.
     /// </summary>
     [RequireComponent(typeof(NetworkPlayer))]
-    public class BotBrain : MonoBehaviour
+    public partial class BotBrain : MonoBehaviour
     {
-        const float ScanInterval = 0.25f;
-        const float ReactionTime = 0.45f;
-        const float HitChance = 0.3f;
-        const float AimTolerance = 8f;          // градусов: стреляем, когда корпус почти довернулся
-        const float TurnSpeed = 540f;           // градусов в секунду
-        const float RocketDangerTime = 7f;      // от ракет, которым лететь дольше, пока не бегаем
-        const float RocketDangerRadius = Explosion.OuterRadius + 1f;
+        const float ThinkMin = 1.2f, ThinkMax = 2.5f;
+        /// <summary>Надбавка текущему делу при выборе — чтобы бот не бросал начатое из-за мелкой разницы в очках.</summary>
+        const float KeepBonus = 1.3f;
         const float WoundedHp = 70f;            // ниже — идёт лечиться аптечкой
         const float CrateReach = 1.3f;
         const float ReviveReach = 1.6f;
         const float BlacklistTime = 30f;
 
+        enum BotTask
+        {
+            None,
+            Patrol,
+            Follow,
+            Lookout,
+            Revive,
+            Loot,
+            Artillery,
+            Ride,
+            TakeFlag,
+            CarryFlag,
+            Hunt,
+            Bombard
+        }
+
+        /// <summary>Веса дел для характера (1 — обычный интерес).</summary>
+        struct Traits
+        {
+            public float Artillery, Ride, Revive, Loot, Flag, Hunt, Follow, Lively;
+            /// <summary>С какой вероятностью после своего пуска садится на ракету.</summary>
+            public float RideChance;
+            public bool TakesSniper, TakesBazooka;
+
+            public static Traits For(BotRole role)
+            {
+                switch (role)
+                {
+                    case BotRole.Artillery:
+                        return new Traits { Artillery = 2.2f, Ride = 0.4f, RideChance = 0.1f, Revive = 1f, Loot = 0.7f, Flag = 0.5f,
+                            Hunt = 0.7f, Follow = 0.3f, Lively = 0.6f, TakesSniper = true };
+                    case BotRole.Assault:
+                        return new Traits { Artillery = 0.9f, Ride = 1.6f, RideChance = 0.6f, Revive = 0.7f, Loot = 0.8f, Flag = 1.8f,
+                            Hunt = 1.5f, Follow = 0.2f, Lively = 1.2f, TakesBazooka = true };
+                    case BotRole.Medic:
+                        return new Traits { Artillery = 0.7f, Ride = 0.3f, RideChance = 0.1f, Revive = 2.2f, Loot = 1f, Flag = 0.6f,
+                            Hunt = 0.6f, Follow = 1.5f, Lively = 0.8f };
+                    default:
+                        return new Traits { Artillery = 0.8f, Ride = 0.6f, RideChance = 0.25f, Revive = 0.9f, Loot = 2.2f, Flag = 0.8f,
+                            Hunt = 1f, Follow = 0.3f, Lively = 1f, TakesSniper = true, TakesBazooka = true };
+                }
+            }
+        }
+
+        /// <summary>Характер; ставится сразу после AddComponent (до первого кадра).</summary>
+        public BotRole Role { get; set; }
+
+        /// <summary>Сервер: характер для нового бота команды — тот, которого в ней пока меньше всего (при равенстве — случайный).</summary>
+        public static BotRole PickRole(int team)
+        {
+            var counts = new int[4];
+            foreach (var p in PlayerHealth.All)
+                if (p != null && p.Team == team && p.TryGetComponent(out BotBrain brain))
+                    counts[(int)brain.Role]++;
+            int min = Mathf.Min(Mathf.Min(counts[0], counts[1]), Mathf.Min(counts[2], counts[3]));
+            var options = new List<BotRole>();
+            for (int i = 0; i < counts.Length; i++)
+                if (counts[i] == min)
+                    options.Add((BotRole)i);
+            return options[Random.Range(0, options.Count)];
+        }
+
         NetworkPlayer _net;
         PlayerHealth _health;
         FpsController _fps;
+        Traits _traits;
 
-        // бой
-        PlayerHealth _enemy;
-        float _scanTimer, _seenFor, _shotTimer;
-        Vector3 _enemyLastPos, _enemyVelocity;
+        // текущее дело
+        BotTask _task;
+        float _thinkTimer, _taskTime;
+        PlayerHealth _taskPlayer;      // кого поднимаем / за кем идём / на кого охотимся
+        LootCrate _taskCrate;
+        RocketSilo _taskSilo;          // пульт, шахта для полёта или цель базуки
+        Vector3 _taskPoint;
+        float _lookoutCooldown, _artilleryCooldown, _bombardCooldown;
+
+        /// <summary>Остров под ногами (null — над пропастью).</summary>
+        VoxelIsland _here;
 
         // удержание «E» (подъём / открытие ящика)
         Object _holdTarget;
         float _holdProgress;
 
-        // патруль и застревание
+        // патруль, «живость» и застревание
         Vector3? _patrolPoint;
-        float _patrolTimer;
+        float _patrolTimer, _pauseTimer, _lookTimer;
+        Quaternion _lookAround;
         Vector3 _stuckCheckPos;
         float _stuckWindow, _stuckTime;
         bool _blocked;
@@ -61,14 +142,31 @@ namespace RocketWars.Player
             _fps = GetComponent<FpsController>();
         }
 
+        void Start()
+        {
+            _traits = Traits.For(Role);
+            _thinkTimer = Random.Range(0.2f, 1f);
+            _artilleryCooldown = Random.Range(3f, 12f) / _traits.Artillery; // в начале раунда к пультам бегут не все разом
+            Debug.Log($"[RocketWars] bot {_health.DisplayName} is {Role}");
+        }
+
         void OnEnable() => _health.Hurt += OnHurt;
-        void OnDisable() => _health.Hurt -= OnHurt;
+
+        void OnDisable()
+        {
+            _health.Hurt -= OnHurt;
+            ReleaseConsole();
+            if (_rideSilo >= 0)
+                ReleaseRide();
+        }
 
         /// <summary>Урон сбивает подъём и открытие ящика — как у игрока.</summary>
         void OnHurt(float amount) => _holdProgress = 0f;
 
         VoxelIsland MyIsland => VoxelIsland.ForTeam(_health.Team);
+        VoxelIsland EnemyIsland => VoxelIsland.ForTeam(1 - _health.Team);
         Vector3 Eye => _fps.CameraRoot.position;
+        bool OnEnemyIsland => _here != null && _here.Team != _health.Team;
 
         void Update()
         {
@@ -77,284 +175,254 @@ namespace RocketWars.Player
 
             _fps.MovementLocked = MatchManager.FreezePlayers;
             bool active = MatchManager.Instance != null && MatchManager.Instance.Phase == MatchPhase.Round;
+
+            if (_rideSilo >= 0)
+            {
+                UpdateRide(active);
+                return;
+            }
+
             if (!active || _health.IsDowned || MyIsland == null || _fps.Attached)
             {
-                Stop();
-                _enemy = null;
-                _holdProgress = 0f;
-                _patrolPoint = null;
+                ResetAll();
                 return;
             }
+
+            _here = IslandUnder(transform.position);
+            float dt = Time.deltaTime;
+            _lookoutCooldown -= dt;
+            _artilleryCooldown -= dt;
+            _bombardCooldown -= dt;
+            _taskTime += dt;
 
             UpdateCombat();
-
-            // ноги: ракета → союзник → ящик → патруль
-            if (Dodge()) return;
-            if (_enemy != null)
-            {
-                Stop(); // в бою стоим и стреляем, остальные дела подождут
+            if (Dodge())
                 return;
-            }
-            if (Revive()) return;
-            if (Crates()) return;
-            Patrol();
-        }
 
-        // ---------- 1. стрельба ----------
-
-        void UpdateCombat()
-        {
-            _scanTimer -= Time.deltaTime;
-            if (_scanTimer <= 0f)
+            // над пропастью (сошли с ракеты) — рулим парашютом к ближайшему острову
+            if (_here == null)
             {
-                _scanTimer = ScanInterval;
-                var found = FindEnemy();
-                if (found != _enemy)
-                {
-                    _enemy = found;
-                    _seenFor = 0f;
-                    if (found != null)
-                    {
-                        _enemyLastPos = found.transform.position;
-                        _enemyVelocity = Vector3.zero;
-                    }
-                }
-            }
-
-            if (_enemy == null || !_enemy.IsSpawned || _enemy.IsDowned)
-            {
-                _enemy = null;
-                _fps.SetPitch(0f);
+                SteerInAir();
                 return;
             }
 
-            // скорость цели — для упреждения (пуля летит 150 м/с)
-            Vector3 pos = _enemy.transform.position;
-            if (Time.deltaTime > 0f)
-                _enemyVelocity = Vector3.Lerp(_enemyVelocity, (pos - _enemyLastPos) / Time.deltaTime, 0.2f);
-            _enemyLastPos = pos;
+            _thinkTimer -= dt;
+            if (_thinkTimer <= 0f || _task == BotTask.None)
+                Think();
 
-            Vector3 chest = pos + Vector3.up * (_enemy.TryGetComponent(out NetworkPlayer np) && np.IsCrouching ? 0.8f : 1.2f);
-            float flight = Vector3.Distance(Eye, chest) / PistolSpec.Speed;
-            Vector3 aim = chest + _enemyVelocity * flight;
-            Vector3 dir = aim - Eye;
-
-            float angle = Face(dir);
-            _seenFor += Time.deltaTime;
-            _shotTimer -= Time.deltaTime;
-            if (_seenFor < ReactionTime || angle > AimTolerance || _shotTimer > 0f)
+            if (_enemy != null && !IgnoresEnemies())
+            {
+                CombatMove();
                 return;
-
-            if (Random.value >= HitChance)
-            {
-                // промах: смещаем точку прицела на 1,2–2 м поперёк линии огня — мимо тела наверняка
-                Vector3 side = Vector3.Cross(dir.normalized, Random.onUnitSphere);
-                if (side.sqrMagnitude < 1e-4f)
-                    side = Vector3.Cross(dir.normalized, Vector3.up);
-                aim += side.normalized * Random.Range(1.2f, 2f);
             }
-            _net.Shoot(Eye, (aim - Eye).normalized);
-            _shotTimer = _net.HasMachineGun
-                ? MachineGunSpec.Cooldown * 1.5f
-                : PistolSpec.Cooldown + Random.Range(0.15f, 0.4f);
+            _fps.BotCrouch = false;
+
+            if (!RunTask())
+            {
+                EndTask();
+                _thinkTimer = 0f;
+            }
         }
 
-        /// <summary>Ближайший видимый враг на своём острове (или над ним — на парашюте, на ракете).</summary>
-        PlayerHealth FindEnemy()
+        void ResetAll()
         {
-            var bounds = MyIsland.WorldBounds;
-            bounds.Expand(new Vector3(2f, 40f, 2f));
-            PlayerHealth best = null;
-            float bestDist = float.MaxValue;
-            foreach (var p in PlayerHealth.All)
-            {
-                if (!p.IsSpawned || p.IsDowned || p.Team == _health.Team || !bounds.Contains(p.transform.position))
-                    continue;
-                float d = Vector3.Distance(transform.position, p.transform.position);
-                if (d < bestDist && CanSee(p))
-                {
-                    best = p;
-                    bestDist = d;
-                }
-            }
-            return best;
-        }
-
-        bool CanSee(PlayerHealth target)
-        {
-            Vector3 to = target.transform.position + Vector3.up * 1.2f - Eye;
-            var hits = Physics.RaycastAll(Eye, to.normalized, to.magnitude, ~0, QueryTriggerInteraction.Ignore);
-            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-            foreach (var hit in hits)
-            {
-                var owner = hit.collider.GetComponentInParent<PlayerHealth>();
-                if (owner == _health)
-                    continue;
-                return owner == target;
-            }
-            return true;
-        }
-
-        /// <summary>Довернуть корпус (рысканье) и взгляд (тангаж) к направлению; возвращает оставшийся угол.</summary>
-        float Face(Vector3 dir)
-        {
-            Vector3 flat = new Vector3(dir.x, 0f, dir.z);
-            if (flat.sqrMagnitude > 1e-4f)
-            {
-                var want = Quaternion.LookRotation(flat);
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, want, TurnSpeed * Time.deltaTime);
-            }
-            float pitch = -Mathf.Atan2(dir.y, Mathf.Max(0.01f, flat.magnitude)) * Mathf.Rad2Deg;
-            _fps.SetPitch(pitch);
-            return Vector3.Angle(transform.forward, flat);
-        }
-
-        // ---------- 2. уклонение от ракет ----------
-
-        static readonly float[] DodgeTurns = { 0f, 40f, -40f, 80f, -80f, 120f, -120f };
-
-        bool Dodge()
-        {
-            Rocket danger = null;
-            float dangerDist = RocketDangerRadius;
-            foreach (var r in Rocket.Active)
-            {
-                if (r == null || !r.HitsGround || r.TimeToImpact > RocketDangerTime || r.TimeToImpact < 0f)
-                    continue;
-                float d = Flat(transform.position - r.Target).magnitude;
-                if (d < dangerDist)
-                {
-                    danger = r;
-                    dangerDist = d;
-                }
-            }
-            if (danger == null)
-                return false;
-
+            Stop();
+            _fps.BotCrouch = false;
+            _net.SetBotOptics(false, false);
+            _enemy = null;
             _holdProgress = 0f;
-            Vector3 away = Flat(transform.position - danger.Target);
-            if (away.sqrMagnitude < 0.01f)
-                away = transform.forward;
-            // пробуем бежать прямо от точки падения, потом всё круче в стороны (край острова — не вариант)
-            foreach (float turn in DodgeTurns)
+            _patrolPoint = null;
+            EndTask();
+        }
+
+        // ---------- выбор дела ----------
+
+        void Think()
+        {
+            _thinkTimer = Random.Range(ThinkMin, ThinkMax);
+            // бежим к ракете под сиреной — 2,5 с, не передумываем
+            if (_task == BotTask.Ride && _taskSilo != null && _taskSilo.State == SiloState.Launching)
+                return;
+
+            var best = BotTask.Patrol;
+            float bestScore = 0.3f;
+            PlayerHealth bestPlayer = null;
+            LootCrate bestCrate = null;
+            RocketSilo bestSilo = null;
+            Vector3 bestPoint = default;
+
+            void Consider(BotTask task, float score, PlayerHealth player = null, LootCrate crate = null, RocketSilo silo = null, Vector3 point = default)
             {
-                Vector3 dir = Quaternion.Euler(0f, turn, 0f) * away.normalized;
-                if (GroundAhead(dir))
+                if (score <= 0f)
+                    return;
+                score *= Random.Range(0.85f, 1.15f);
+                if (task == _task)
+                    score *= KeepBonus;
+                if (score <= bestScore)
+                    return;
+                best = task;
+                bestScore = score;
+                bestPlayer = player;
+                bestCrate = crate;
+                bestSilo = silo;
+                bestPoint = point;
+            }
+
+            // несём вражеский флаг — важнее всего, остальное подождёт
+            if (CarriedFlag() != null)
+                Consider(BotTask.CarryFlag, 100f);
+
+            Consider(BotTask.Revive, ScoreRevive(out var ally), player: ally);
+            Consider(BotTask.Loot, ScoreLoot(out var crate), crate: crate);
+            Consider(BotTask.Artillery, ScoreArtillery(out var console), silo: console);
+            Consider(BotTask.Ride, ScoreRide(out var launching), silo: launching);
+            Consider(BotTask.TakeFlag, ScoreTakeFlag());
+            Consider(BotTask.Hunt, ScoreHunt(out var prey), player: prey);
+            Consider(BotTask.Bombard, ScoreBombard(out var enemySilo), silo: enemySilo);
+            Consider(BotTask.Follow, ScoreFollow(out var friend), player: friend);
+            Consider(BotTask.Lookout, ScoreLookout(out var spot), point: spot);
+
+            if (best == _task)
+            {
+                // то же дело: ящик, союзника, добычу можно сменить на более близкие, остальное не бросаем на полпути
+                if (_task == BotTask.Revive || _task == BotTask.Loot || _task == BotTask.Hunt || _task == BotTask.Follow)
                 {
-                    Drive(dir, true);
+                    _taskPlayer = bestPlayer;
+                    _taskCrate = bestCrate;
+                }
+                return;
+            }
+
+            EndTask();
+            _task = best;
+            _taskTime = 0f;
+            _taskPlayer = bestPlayer;
+            _taskCrate = bestCrate;
+            _taskSilo = bestSilo;
+            _taskPoint = bestPoint;
+            if (_task == BotTask.Artillery || _task == BotTask.CarryFlag)
+                BeginConsole(_task == BotTask.CarryFlag);
+        }
+
+        bool RunTask()
+        {
+            switch (_task)
+            {
+                case BotTask.Revive: return RunRevive();
+                case BotTask.Loot: return RunLoot();
+                case BotTask.Artillery: return RunConsole();
+                case BotTask.CarryFlag: return RunCarryFlag();
+                case BotTask.Ride: return RunRideApproach();
+                case BotTask.TakeFlag: return RunTakeFlag();
+                case BotTask.Hunt: return RunHunt();
+                case BotTask.Bombard: return RunBombard();
+                case BotTask.Follow: return RunFollow();
+                case BotTask.Lookout: return RunLookout();
+                default:
+                    Patrol();
                     return true;
-                }
             }
-            Stop();
-            return true;
         }
 
-        // ---------- 3. подъём союзников ----------
-
-        bool Revive()
+        /// <summary>Дела, которые бот не бросает, даже когда видит врага (стреляет на ходу).</summary>
+        bool IgnoresEnemies()
         {
-            PlayerHealth target = null;
-            float best = float.MaxValue;
-            var bounds = MyIsland.WorldBounds;
-            bounds.Expand(new Vector3(0f, 6f, 0f));
-            foreach (var p in PlayerHealth.All)
+            switch (_task)
             {
-                if (p == _health || !p.IsSpawned || !p.IsDowned || p.Team != _health.Team || IsBlacklisted(p))
-                    continue;
-                if (!bounds.Contains(p.transform.position))
-                    continue; // на чужом острове или в воздухе — не дойти
-                float d = Flat(p.transform.position - transform.position).magnitude;
+                case BotTask.CarryFlag:
+                case BotTask.Ride:
+                    return true;
+                case BotTask.Artillery:
+                    return _consoleStep >= ConsoleStep.Think; // уже целимся — доводим пуск (пока ждём перезарядку — отстреливаемся)
+                case BotTask.TakeFlag:
+                    return _traits.Flag > 1f;
+                default:
+                    return false;
+            }
+        }
+
+        void EndTask()
+        {
+            if (_task == BotTask.Lookout)
+                _net.SetBotOptics(false, false);
+            if (_task == BotTask.Artillery || _task == BotTask.CarryFlag)
+                ReleaseConsole();
+            _task = BotTask.None;
+            _taskPlayer = null;
+            _taskCrate = null;
+            _taskSilo = null;
+        }
+
+        // ---------- над пропастью ----------
+
+        void SteerInAir()
+        {
+            if (_fps.IsGrounded)
+            {
+                Stop();
+                return;
+            }
+            // к ближайшему острову (обычно — тому, куда летела ракета)
+            VoxelIsland nearest = null;
+            float best = float.MaxValue;
+            foreach (var island in VoxelIsland.All)
+            {
+                float d = Flat(island.Center - transform.position).magnitude;
                 if (d < best)
                 {
-                    target = p;
                     best = d;
+                    nearest = island;
                 }
             }
-            if (target == null)
-                return false;
-
-            if (best > ReviveReach || Mathf.Abs(target.transform.position.y - transform.position.y) > 2f)
+            if (nearest != null)
             {
-                if (!MoveTo(target.transform.position, true, ReviveReach))
-                    Blacklist(target);
-                ResetHold(target);
-                return true;
+                _fps.BotMove = Flat(nearest.Center - transform.position).normalized;
+                _fps.BotSprint = false;
+                if (_enemy == null)
+                    Face(_fps.BotMove);
             }
-
-            Stop();
-            Face(target.transform.position - Eye);
-            if (Hold(target, ReviveInteraction.ReviveDuration))
-                _net.RequestRevive(target);
-            return true;
         }
 
-        // ---------- 4. ящики ----------
-
-        bool Crates()
-        {
-            LootCrate target = null;
-            float best = float.MaxValue;
-            bool wounded = _health.Hp < WoundedHp;
-            foreach (var crate in LootCrate.All)
-            {
-                if (crate.Island != MyIsland || crate.State == CrateState.Destroyed || crate.IsFalling || IsBlacklisted(crate))
-                    continue;
-                bool wanted = crate.State == CrateState.Closed
-                              || (crate.Kind == LootKind.MachineGun && crate.HasItem && !_net.HasMachineGun)
-                              || (crate.Medkits > 0 && wounded);
-                if (!wanted)
-                    continue;
-                float d = Flat(crate.Center - transform.position).magnitude;
-                if (d < best)
-                {
-                    target = crate;
-                    best = d;
-                }
-            }
-            if (target == null)
-                return false;
-
-            if (best > CrateReach)
-            {
-                if (!MoveTo(target.Center, false, CrateReach))
-                    Blacklist(target);
-                ResetHold(target);
-                return true;
-            }
-
-            Stop();
-            Face(target.Center - Eye);
-            if (target.State == CrateState.Closed)
-            {
-                // раненому сервер сразу применит аптечку из только что открытого ящика
-                if (Hold(target, LootCrate.OpenTime))
-                    _net.OpenCrate(target);
-            }
-            else if (target.Kind == LootKind.MachineGun && target.HasItem && !_net.HasMachineGun)
-            {
-                _net.TakeLoot(target);
-            }
-            else if (target.Medkits > 0 && _health.Hp < PlayerHealth.MaxHp)
-            {
-                _net.UseMedkit(target);
-            }
-            // снайперку, базуку, броню и маяк бот не берёт — оставляет игрокам
-            return true;
-        }
-
-        // ---------- 5. патруль ----------
+        // ---------- патруль ----------
 
         void Patrol()
         {
+            // «живость»: иногда останавливается и оглядывается
+            if (_pauseTimer > 0f)
+            {
+                _pauseTimer -= Time.deltaTime;
+                Stop();
+                _lookTimer -= Time.deltaTime;
+                if (_lookTimer <= 0f)
+                {
+                    _lookTimer = Random.Range(0.6f, 1.4f);
+                    _lookAround = Quaternion.Euler(0f, Random.Range(-120f, 120f), 0f) * transform.rotation;
+                }
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, _lookAround, 120f * Time.deltaTime);
+                _fps.SetPitch(Mathf.Sin(Time.time * 0.7f) * 6f);
+                return;
+            }
+
             _patrolTimer -= Time.deltaTime;
             if (_patrolPoint == null || _patrolTimer <= 0f || _blocked)
             {
-                _patrolPoint = MyIsland.GetRandomSpawnPoint(0f);
+                _patrolPoint = _here.GetRandomSpawnPoint(0f);
                 _patrolTimer = 20f;
                 _blocked = false;
             }
             if (MoveTo(_patrolPoint.Value, false, 1.5f))
+            {
                 _patrolPoint = null; // дошли — следующая точка
+                if (Random.value < 0.5f * _traits.Lively)
+                {
+                    _pauseTimer = Random.Range(1f, 3f);
+                    _lookTimer = 0f;
+                }
+            }
+            else if (Random.value < 0.004f * _traits.Lively)
+            {
+                _fps.BotJump(); // просто так подпрыгнул на бегу
+            }
         }
 
         // ---------- движение ----------
@@ -427,6 +495,7 @@ namespace RocketWars.Player
             if (moved < 0.4f && _fps.IsGrounded)
             {
                 _stuckTime += _stuckWindow;
+                _fps.BotCrouch = false;
                 _fps.BotJump();
                 if (_stuckTime > 3f)
                 {
@@ -456,6 +525,20 @@ namespace RocketWars.Player
             return true;
         }
 
+        /// <summary>Довернуть корпус (рысканье) и взгляд (тангаж) к направлению; возвращает оставшийся угол.</summary>
+        float Face(Vector3 dir)
+        {
+            Vector3 flat = new Vector3(dir.x, 0f, dir.z);
+            if (flat.sqrMagnitude > 1e-4f)
+            {
+                var want = Quaternion.LookRotation(flat);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, want, TurnSpeed * Time.deltaTime);
+            }
+            float pitch = -Mathf.Atan2(dir.y, Mathf.Max(0.01f, flat.magnitude)) * Mathf.Rad2Deg;
+            _fps.SetPitch(pitch);
+            return Vector3.Angle(transform.forward, flat);
+        }
+
         // ---------- удержание «E» ----------
 
         /// <summary>Копит время удержания на цели; true — время вышло (действие выполнено, счётчик сброшен).</summary>
@@ -479,7 +562,7 @@ namespace RocketWars.Player
 
         // ---------- недостижимые цели ----------
 
-        bool IsBlacklisted(Object target) => _blacklist.TryGetValue(target, out float until) && Time.time < until;
+        bool IsBlacklisted(Object target) => target != null && _blacklist.TryGetValue(target, out float until) && Time.time < until;
 
         void Blacklist(Object target)
         {
@@ -487,6 +570,34 @@ namespace RocketWars.Player
                 return;
             _blacklist[target] = Time.time + BlacklistTime;
             _blocked = false;
+        }
+
+        // ---------- общее ----------
+
+        /// <summary>Остров, над которым точка (по плану, без высоты); null — пропасть.</summary>
+        static VoxelIsland IslandUnder(Vector3 p)
+        {
+            foreach (var island in VoxelIsland.All)
+            {
+                var b = island.WorldBounds;
+                if (p.x >= b.min.x && p.x <= b.max.x && p.z >= b.min.z && p.z <= b.max.z)
+                    return island;
+            }
+            return null;
+        }
+
+        /// <summary>Точка внутри острова не ближе margin к краю его прямоугольника.</summary>
+        static bool InInterior(VoxelIsland island, Vector3 p, float margin)
+        {
+            var b = island.WorldBounds;
+            return p.x >= b.min.x + margin && p.x <= b.max.x - margin && p.z >= b.min.z + margin && p.z <= b.max.z - margin;
+        }
+
+        /// <summary>Флаг противника, который несёт этот бот (null — не несёт).</summary>
+        TeamFlag CarriedFlag()
+        {
+            var flag = MatchNet.Instance != null ? MatchNet.Instance.GetFlag(1 - _health.Team) : null;
+            return flag != null && flag.State == FlagState.Carried && flag.CarrierId == _health.NetworkObjectId ? flag : null;
         }
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);

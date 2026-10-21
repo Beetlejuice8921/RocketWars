@@ -130,7 +130,7 @@ namespace RocketWars.Player
             _bazookaModel.SetActive(false);
 
             // бронежилет поверх куртки — пока есть броня
-            var (vestMesh, vestMats) = Models.WornVest();
+            var (vestMesh, vestMats) = Models.WornVest(team);
             _vest = BoxModel.Spawn(vestMesh, vestMats, _body, Vector3.zero, "Vest");
             _vest.SetActive(false);
             // и вторая каска цвета жилета поверх обычной — спрыгивает с головы, когда броня кончилась
@@ -175,7 +175,7 @@ namespace RocketWars.Player
             _health.Hurt -= OnHurt;
         }
 
-        /// <summary>Перешёл в другую команду: перекрасить нашивки, рукава, полосу каски и берсерк-форму.</summary>
+        /// <summary>Перешёл в другую команду: перекрасить нашивки (куртка и жилет), рукава, полосу каски и берсерк-форму.</summary>
         void OnTeamChanged(int team)
         {
             if (_body == null)
@@ -184,6 +184,7 @@ namespace RocketWars.Player
             var arm = Models.CharacterArm(team);
             SetModel(_armL, arm);
             SetModel(_armR, arm);
+            SetModel(_vest.transform, Models.WornVest(team));
             (_helmetMesh, _helmetMats) = Models.CharacterHelmet(team);
             SetModel(_helmet, (_helmetMesh, _helmetMats));
             SetBerserkTeam(team);

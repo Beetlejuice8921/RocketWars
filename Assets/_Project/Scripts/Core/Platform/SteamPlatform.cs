@@ -11,6 +11,23 @@ namespace RocketWars.Core
     {
         public override string Id => "steam";
 
+#if UNITY_STANDALONE
+        // размер и режим окна Unity сам запоминает между запусками
+        public override bool CanToggleWindowed => true;
+
+        public override bool IsWindowed => Screen.fullScreenMode == FullScreenMode.Windowed; // могли переключить Alt+Enter
+
+        /// <summary>Окно — 3/4 экрана (в окне на всю ширину заголовок ушёл бы за край), полный экран — родное разрешение.</summary>
+        public override void SetWindowed(bool windowed)
+        {
+            int w = Display.main.systemWidth, h = Display.main.systemHeight;
+            if (windowed)
+                Screen.SetResolution(w * 3 / 4, h * 3 / 4, FullScreenMode.Windowed);
+            else
+                Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow);
+        }
+#endif
+
         /// <summary>Язык интерфейса Windows → язык игры; неподдерживаемый — английский.</summary>
         public override Lang DetectLanguage()
         {

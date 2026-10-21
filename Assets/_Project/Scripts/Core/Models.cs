@@ -165,9 +165,9 @@ namespace RocketWars.Core
             var m = new BoxModel()
                 // куртка в камуфляже
                 .PatternBox(new Vector3(0, 1.2f, 0), new Vector3(0.6f, 0.7f, 0.34f), CamoTile, p => Camo(p, 0f))
-                // нашивки цвета команды на груди и спине
-                .Box(new Vector3(0.14f, 1.38f, 0.175f), new Vector3(0.14f, 0.1f, 0.012f), teamColor)
-                .Box(new Vector3(0, 1.3f, -0.175f), new Vector3(0.26f, 0.18f, 0.012f), teamColor)
+                // нашивки цвета команды на груди и спине — крупные, чтобы читались на любом скине
+                .Box(new Vector3(0.13f, 1.37f, 0.175f), new Vector3(0.2f, 0.15f, 0.014f), teamColor)
+                .Box(new Vector3(0, 1.28f, -0.175f), new Vector3(0.38f, 0.28f, 0.014f), teamColor)
                 // ремень с пряжкой и подсумками
                 .Box(new Vector3(0, 0.89f, 0), new Vector3(0.63f, 0.09f, 0.37f), Leather)
                 .Box(new Vector3(0, 0.89f, 0.19f), new Vector3(0.1f, 0.07f, 0.02f), Buckle)
@@ -295,7 +295,7 @@ namespace RocketWars.Core
             VoxelDisc(m, 0.12f * k, 0.18f * k, 0.22f * k, 7, HelmetOlive);
             VoxelDisc(m, 0.18f * k, 0.23f * k, 0.16f * k, 5, HelmetOlive);
             VoxelDisc(m, 0.23f * k, 0.26f * k, 0.09f * k, 3, HelmetOlive);
-            VoxelDisc(m, 0.07f * k, 0.11f * k, 0.26f * k * 1.04f, 8, RuntimeMaterials.TeamColor(team)); // полоса команды
+            VoxelDisc(m, 0.045f * k, 0.12f * k, 0.26f * k * 1.06f, 8, RuntimeMaterials.TeamColor(team)); // полоса команды (широкая)
             return m.Build($"char_helmet_{team}");
         }
 
@@ -324,7 +324,7 @@ namespace RocketWars.Core
         {
             return new BoxModel()
                 .PatternBox(new Vector3(0, -0.28f, 0), new Vector3(0.18f, 0.56f, 0.22f), CamoTile, p => Camo(p, 5.7f))
-                .Box(new Vector3(0, -0.13f, 0), new Vector3(0.19f, 0.08f, 0.23f), RuntimeMaterials.TeamColor(team))
+                .Box(new Vector3(0, -0.15f, 0), new Vector3(0.195f, 0.14f, 0.235f), RuntimeMaterials.TeamColor(team))
                 .Box(new Vector3(0, -0.62f, 0), new Vector3(0.16f, 0.14f, 0.18f), Glove)
                 .Build($"char_arm_{team}");
         }
@@ -457,15 +457,22 @@ namespace RocketWars.Core
                 .Build("armor_vest");
         }
 
-        /// <summary>Бронежилет на игроке поверх куртки — в координатах тела (как CharacterBody).</summary>
-        public static (Mesh mesh, Material[] materials) WornVest()
+        /// <summary>
+        /// Бронежилет на игроке поверх куртки — в координатах тела (как CharacterBody).
+        /// Закрывает нашивки куртки, поэтому несёт свои: на кармане спереди и во всю спину.
+        /// </summary>
+        public static (Mesh mesh, Material[] materials) WornVest(int team)
         {
+            var teamColor = RuntimeMaterials.TeamColor(team);
             return new BoxModel()
                 .Box(new Vector3(0f, WornVestY, 0f), new Vector3(0.64f, 0.5f, 0.4f), VestNavy)
                 .Box(new Vector3(0f, WornVestY - 0.02f, 0.205f), new Vector3(0.44f, 0.3f, 0.02f), VestNavyDark)
                 .Box(new Vector3(0.2f, WornVestY + 0.27f, 0f), new Vector3(0.12f, 0.06f, 0.38f), VestNavy)
                 .Box(new Vector3(-0.2f, WornVestY + 0.27f, 0f), new Vector3(0.12f, 0.06f, 0.38f), VestNavy)
-                .Build("worn_vest");
+                // нашивки цвета команды
+                .Box(new Vector3(0.12f, WornVestY + 0.06f, 0.221f), new Vector3(0.18f, 0.13f, 0.012f), teamColor)
+                .Box(new Vector3(0f, WornVestY, -0.207f), new Vector3(0.36f, 0.26f, 0.014f), teamColor)
+                .Build($"worn_vest_{team}");
         }
 
         public const float WornVestY = 1.25f;
@@ -661,6 +668,49 @@ namespace RocketWars.Core
                 m.Box(rot * new Vector3(0f, 0.07f, -0.18f), new Vector3(0.012f, 0.07f, 0.09f), Dark, rot);
             }
             return m.Build("bazooka_shell");
+        }
+
+        // ---------- самолёт сброса припасов ----------
+
+        /// <summary>Где на крыле стоят винты (для Propeller): ±X, высота, вынос вперёд по +Z.</summary>
+        public static readonly Vector3[] PlanePropellers = { new Vector3(-3.4f, 0.6f, 2.6f), new Vector3(3.4f, 0.6f, 2.6f) };
+
+        /// <summary>
+        /// Транспортный самолёт вдоль +Z, общий для обеих команд: серо-оливковый фюзеляж, высокое крыло,
+        /// два мотора, хвост с килем. Винты — отдельный меш (Propeller), их крутит AirDropPlane.
+        /// </summary>
+        public static (Mesh mesh, Material[] materials) CargoPlane()
+        {
+            var body = new Color(0.45f, 0.48f, 0.42f);
+            var bodyDark = new Color(0.34f, 0.37f, 0.32f);
+            var glass = new Color(0.2f, 0.32f, 0.4f);
+            var m = new BoxModel();
+            m.Box(new Vector3(0f, 0f, 0f), new Vector3(2f, 2f, 9f), body);                         // фюзеляж
+            m.Box(new Vector3(0f, -0.1f, 5.1f), new Vector3(1.7f, 1.7f, 1.2f), body);              // нос
+            m.Box(new Vector3(0f, -0.2f, 6f), new Vector3(1.2f, 1.2f, 0.6f), bodyDark);            // кончик носа
+            m.Box(new Vector3(0f, 0.55f, 5.55f), new Vector3(1.3f, 0.45f, 0.4f), glass);           // кабина
+            m.Box(new Vector3(0f, 0.2f, -5.3f), new Vector3(1.5f, 1.5f, 1.6f), body);              // хвостовая часть
+            m.Box(new Vector3(0f, 0.5f, -6.7f), new Vector3(0.9f, 0.9f, 1.4f), body);
+            m.Box(new Vector3(0f, -1.05f, -2.5f), new Vector3(1.6f, 0.1f, 3f), bodyDark);          // грузовой люк
+            m.Box(new Vector3(0f, 1.1f, 0.8f), new Vector3(15f, 0.3f, 2.2f), body);                // крыло
+            m.Box(new Vector3(0f, 1.1f, 0.8f), new Vector3(15.1f, 0.18f, 0.4f), bodyDark);         // полоса по крылу
+            m.Box(new Vector3(0f, 0.8f, -7f), new Vector3(5.6f, 0.2f, 1.3f), body);                // стабилизатор
+            m.Box(new Vector3(0f, 2f, -6.9f), new Vector3(0.2f, 2.4f, 1.5f), body);                // киль
+            m.Box(new Vector3(0f, 2.9f, -6.9f), new Vector3(0.24f, 0.5f, 1.5f), bodyDark);
+            foreach (var p in PlanePropellers)
+            {
+                m.Box(new Vector3(p.x, p.y, 1.1f), new Vector3(0.9f, 0.9f, 2.6f), bodyDark); // мотор под крылом
+                m.Box(new Vector3(p.x, p.y, p.z - 0.15f), new Vector3(0.4f, 0.4f, 0.3f), Dark); // кок винта
+            }
+            return m.Build("cargo_plane");
+        }
+
+        /// <summary>Двухлопастный винт в плоскости XY, ось — Z.</summary>
+        public static (Mesh mesh, Material[] materials) Propeller()
+        {
+            var m = new BoxModel();
+            m.Box(Vector3.zero, new Vector3(2.2f, 0.22f, 0.08f), Dark);
+            return m.Build("propeller");
         }
     }
 }

@@ -6,7 +6,7 @@ using UnityEngine.UIElements;
 namespace RocketWars.UI
 {
     /// <summary>
-    /// Окно опций (из главного меню и из паузы): язык, громкость, оконный режим (десктоп), чувствительность мыши, переназначение клавиш.
+    /// Окно опций (из главного меню и из паузы): язык, громкость, оконный режим (ПК и Telegram на компьютере), чувствительность мыши, переназначение клавиш.
     /// Переназначение: клик по клавише действия → ждём следующую клавишу или кнопку мыши (Esc — отмена);
     /// если она уже занята, действия меняются клавишами.
     /// </summary>
@@ -14,7 +14,7 @@ namespace RocketWars.UI
     {
         readonly VisualElement _screen, _langPicker;
         readonly Label _sensValue;
-        readonly Toggle _windowed; // null вне десктопа
+        readonly Toggle _windowed; // null, где площадка не даёт переключать (GamePlatform.CanToggleWindowed)
         readonly Button[] _bindButtons = new Button[GameInput.ActionCount];
         int _listening = -1;
         int _listenFrame;
@@ -41,14 +41,14 @@ namespace RocketWars.UI
             volume.RegisterValueChangedCallback(e => UiRoot.Volume = e.newValue);
             scroll.Add(volume);
 
-#if UNITY_STANDALONE
-            // только десктоп: размер и режим окна Unity сам запоминает между запусками
-            Ui.Text(scroll, Loc.T("ЭКРАН"), "section");
-            _windowed = new Toggle(" " + Loc.T("Оконный режим"));
-            _windowed.AddToClassList("label-dim");
-            _windowed.RegisterValueChangedCallback(e => SetWindowed(e.newValue));
-            scroll.Add(_windowed);
-#endif
+            if (GamePlatform.Current.CanToggleWindowed)
+            {
+                Ui.Text(scroll, Loc.T("ЭКРАН"), "section");
+                _windowed = new Toggle(" " + Loc.T("Оконный режим"));
+                _windowed.AddToClassList("label-dim");
+                _windowed.RegisterValueChangedCallback(e => GamePlatform.Current.SetWindowed(e.newValue));
+                scroll.Add(_windowed);
+            }
 
             Ui.Text(scroll, Loc.T("ЧУВСТВИТЕЛЬНОСТЬ МЫШИ"), "section");
             var sensRow = Ui.El(scroll, "row");
@@ -89,19 +89,12 @@ namespace RocketWars.UI
         public void Open()
         {
             RefreshBinds();
-            _windowed?.SetValueWithoutNotify(Screen.fullScreenMode == FullScreenMode.Windowed); // могли переключить Alt+Enter
+            SyncWindowed();
             Ui.Show(_screen, true);
         }
 
-        /// <summary>Окно — 3/4 экрана (в окне на всю ширину заголовок ушёл бы за край), полный экран — родное разрешение.</summary>
-        static void SetWindowed(bool windowed)
-        {
-            int w = Display.main.systemWidth, h = Display.main.systemHeight;
-            if (windowed)
-                Screen.SetResolution(w * 3 / 4, h * 3 / 4, FullScreenMode.Windowed);
-            else
-                Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow);
-        }
+        // режим меняют и мимо опций: Alt+Enter на ПК, кнопки самого Telegram, отказ Telegram развернуть окно
+        void SyncWindowed() => _windowed?.SetValueWithoutNotify(GamePlatform.Current.IsWindowed);
 
         public void Close()
         {
@@ -126,6 +119,7 @@ namespace RocketWars.UI
 
         public void Update()
         {
+            SyncWindowed();
             if (_waitRelease && !AnyMouseButton())
                 _waitRelease = false;
             if (_listening < 0 || Time.frameCount <= _listenFrame || !GameInput.TryCapture(out int code))

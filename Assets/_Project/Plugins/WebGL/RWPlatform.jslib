@@ -21,7 +21,9 @@ mergeInto(LibraryManager.library, {
     var done = function (lang, name, prefs, start, auth) {
       if (rw.ready) return;
       rw.ready = true;
-      send('OnInit', JSON.stringify({ lang: lang || '', name: name || '', prefs: prefs || '', start: start || '', auth: auth || '' }));
+      // winToggle — площадка даёт переключать «во весь экран / в окне» (Telegram на компьютере)
+      send('OnInit', JSON.stringify({ lang: lang || '', name: name || '', prefs: prefs || '', start: start || '', auth: auth || '',
+        winToggle: !!rw.winToggle, windowed: !!(rw.winToggle && !rw.tg.isFullscreen) }));
     };
 
     if (platform === 'yandex' && typeof YaGames !== 'undefined') {
@@ -75,6 +77,15 @@ mergeInto(LibraryManager.library, {
       if (tg.isVersionAtLeast('8.0')) {
         tg.onEvent('deactivated', function () { send('OnPause', 'sdk'); });
         tg.onEvent('activated', function () { send('OnResume', 'sdk'); });
+        // на компьютере (Telegram Desktop, web.telegram.org) — переключатель «Оконный режим» в опциях;
+        // на телефоне всегда во весь экран: так игра горизонтальная и без шапки Telegram
+        var tgMobile = tg.platform === 'android' || tg.platform === 'android_x' || tg.platform === 'ios';
+        if (!tgMobile) {
+          rw.winToggle = true;
+          var syncWindowed = function () { send('OnWindowed', tg.isFullscreen ? '0' : '1'); };
+          tg.onEvent('fullscreenChanged', syncWindowed);
+          tg.onEvent('fullscreenFailed', syncWindowed); // web-версия без жеста игрока — остаёмся в окне
+        }
       }
       if (tg.isVersionAtLeast('6.9')) {
         // облако Telegram отвечает быстро, но без ответа за 5 с не держим игру
@@ -98,6 +109,16 @@ mergeInto(LibraryManager.library, {
     if (tg && /^https:\/\/t\.me\//.test(url)) tg.openTelegramLink(url);
     else if (tg) tg.openLink(url);
     else window.open(url, '_blank');
+  },
+
+  // Telegram на компьютере: во весь экран / в окне. Выбор помнит шаблон (localStorage rw_windowed) — при следующем запуске
+  // он не разворачивает игру сам
+  RW_SetFullscreen: function (on) {
+    var rw = window.RWPlatform;
+    if (!rw || !rw.winToggle) return;
+    try { localStorage.setItem('rw_windowed', on ? '0' : '1'); } catch (e) { }
+    if (on) rw.tg.requestFullscreen();
+    else rw.tg.exitFullscreen();
   },
 
   // приглашение: окно Telegram «Поделиться» (выбор чата) со ссылкой и текстом; вне Telegram — та же страница новой вкладкой

@@ -846,12 +846,18 @@
 
 .banner {
     top: 26%;
-    font-size: 37px;
+    font-size: 44px;
 }
 
 .subbanner {
     top: 35%;
     font-size: 17px;
+}
+
+/* разминка: «Enter — начать матч» крупно (мигание — в HudView.UpdateMatch) */
+.subbanner-lobby {
+    top: 36%;
+    font-size: 34px;
 }
 
 .countdown {
@@ -953,8 +959,8 @@
 .info {
     position: absolute;
     left: 24px;
-    top: 120px;
-    font-size: 13px;
+    top: 52px;
+    font-size: 26px;
     color: rgba(255, 255, 255, 0.92);
 }
 
@@ -1313,7 +1319,7 @@
 
 /* телефон: код комнаты и сводка команды — под кнопками «II» и «СЧЁТ» */
 .touch-mode .room-code { top: 110px; }
-.touch-mode .info { top: 140px; }
+.touch-mode .info { top: 140px; font-size: 20px; } /* панель на телефоне и так ×1.4 — 26px упёрлись бы в мини-карту */
 
 /* телефон: итоги во всю ширину (база 1920 там ~1500), пьедестал компактнее — иначе не влезает по высоте */
 .touch-mode .results-panel,

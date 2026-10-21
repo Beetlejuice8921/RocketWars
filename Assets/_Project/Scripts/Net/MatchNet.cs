@@ -61,6 +61,9 @@ namespace RocketWars.Net
         /// <summary>Как часто сервер сверяет численность команд и добавляет/убирает ботов-балансиров.</summary>
         public const float BotBalanceInterval = 15f;
 
+        /// <summary>Минимальный размер команды: недостающих добивают боты (по умолчанию матч 2×2).</summary>
+        public const int MinTeamSize = 2;
+
         readonly List<PlayerHealth> _balanceBots = new List<PlayerHealth>();
         readonly List<NetworkPlayer> _switchQueue = new List<NetworkPlayer>(); // запросы смены команды во время матча
         float _botBalanceTimer = 1f; // первая проверка — сразу после старта хоста
@@ -538,8 +541,9 @@ namespace RocketWars.Net
         // ---------- боты-балансиры ----------
 
         /// <summary>
-        /// Сервер, не чаще раза в 15 с: в команде, где живых игроков меньше, — столько ботов, сколько не хватает
-        /// до равенства; как только команды уравнялись людьми, лишние боты уходят.
+        /// Сервер, не чаще раза в 15 с: каждая команда добивается ботами до размера
+        /// max(<see cref="MinTeamSize"/>, людей в большей команде) — один человек играет 2×2
+        /// (он + бот против двух ботов). Как только людей хватает, лишние боты уходят.
         /// В режиме тестовых ботов (разработка) балансир выключен.
         /// </summary>
         void UpdateBotBalance()
@@ -551,33 +555,36 @@ namespace RocketWars.Net
 
             _balanceBots.RemoveAll(b => b == null || !b.IsSpawned);
             CountHumans(out int h0, out int h1);
-            int needTeam = h0 < h1 ? 0 : 1;
-            int need = h0 == 0 && h1 == 0 ? 0 : Mathf.Abs(h0 - h1);
+            int size = h0 == 0 && h1 == 0 ? 0 : Mathf.Max(MinTeamSize, h0, h1);
+            int need0 = size - h0, need1 = size - h1;
 
-            // лишние или оказавшиеся не в той команде — уходят (сначала лежащие: их уход не решает исход раунда)
-            int keep = 0;
+            // лишние — уходят (сначала лежащие: их уход не решает исход раунда)
+            int keep0 = 0, keep1 = 0;
             _balanceBots.Sort((a, b) => b.IsDowned.CompareTo(a.IsDowned));
             for (int i = _balanceBots.Count - 1; i >= 0; i--)
             {
                 var bot = _balanceBots[i];
-                if (bot.Team == needTeam && keep < need)
-                {
-                    keep++;
-                    continue;
-                }
+                if (bot.Team == 0 && keep0 < need0) { keep0++; continue; }
+                if (bot.Team == 1 && keep1 < need1) { keep1++; continue; }
                 Debug.Log($"[RocketWars] balance bot {bot.DisplayName} leaves (humans {h0}:{h1})");
                 _balanceBots.RemoveAt(i);
                 bot.NetworkObject.Despawn(true);
             }
 
-            for (int i = keep; i < need; i++)
-            {
-                var bot = CreatePlayer(needTeam, $"Bot {++_botCounter}", true);
-                bot.gameObject.AddComponent<BotBrain>();
-                bot.NetworkObject.Spawn(true);
-                _balanceBots.Add(bot);
-                Debug.Log($"[RocketWars] balance bot {bot.DisplayName} joins team {needTeam} (humans {h0}:{h1})");
-            }
+            for (int i = keep0; i < need0; i++)
+                SpawnBalanceBot(0, h0, h1);
+            for (int i = keep1; i < need1; i++)
+                SpawnBalanceBot(1, h0, h1);
+        }
+
+        void SpawnBalanceBot(int team, int h0, int h1)
+        {
+            var role = BotBrain.PickRole(team); // до создания: новый бот не должен считаться сам
+            var bot = CreatePlayer(team, $"Bot {++_botCounter}", true);
+            bot.gameObject.AddComponent<BotBrain>().Role = role;
+            bot.NetworkObject.Spawn(true);
+            _balanceBots.Add(bot);
+            Debug.Log($"[RocketWars] balance bot {bot.DisplayName} joins team {team} (humans {h0}:{h1})");
         }
 
         PlayerHealth CreatePlayer(int team, string displayName, bool bot)

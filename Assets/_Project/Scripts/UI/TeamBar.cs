@@ -41,7 +41,7 @@ namespace RocketWars.UI
             var scores = Ui.El(center, "teambar-scores");
             _score0 = Ui.Text(scores, "0", "teambar-score", "teambar-score0", "shadow");
             _score1 = Ui.Text(scores, "0", "teambar-score", "teambar-score1", "shadow");
-            _round = Ui.Text(center, "ROUND 1", "teambar-round", "shadow");
+            _round = Ui.Text(center, Loc.F("РАУНД {0}", 1), "teambar-round", "shadow");
             _sides[1] = Ui.El(_root, "teambar-side", "teambar-right");
         }
 
@@ -57,7 +57,7 @@ namespace RocketWars.UI
             if (_shownRound != s.Round)
             {
                 _shownRound = s.Round;
-                _round.text = $"ROUND {s.Round}";
+                _round.text = Loc.F("РАУНД {0}", s.Round);
             }
             for (int team = 0; team < 2; team++)
                 UpdateSide(team);
@@ -145,7 +145,7 @@ namespace RocketWars.UI
             ".....oooooo.....",
             "...ooHHHHHHoo...",
             "..oHHHHHHHHhHo..",
-            ".oHHHHHHHHHHhHo.",
+            ".oBBBBBBBBBBBBo.",
             ".oBBBBBBBBBBBBo.",
             "oHHHHHHHHHHHHHHo",
             "oooSSSSSSSSSSooo",

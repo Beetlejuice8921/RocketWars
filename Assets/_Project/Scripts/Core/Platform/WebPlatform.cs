@@ -46,6 +46,7 @@ namespace RocketWars.Core
         string _cloudSaved;
         string _accountName, _inviteCode, _authData;
         bool _initialized, _readyPending;
+        bool _canToggleWindowed, _windowed;
         Action<bool> _adClosed;
 
         public WebPlatform(string id)
@@ -85,6 +86,19 @@ namespace RocketWars.Core
             if (!CanInvite || string.IsNullOrEmpty(roomCode))
                 return;
             RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
+        }
+
+        public override bool CanToggleWindowed => _canToggleWindowed;
+
+        // сразу отражаем выбор игрока; ответ Telegram (fullscreenChanged / fullscreenFailed) поправит через OnWindowed
+        public override bool IsWindowed => _windowed;
+
+        public override void SetWindowed(bool windowed)
+        {
+            if (!_canToggleWindowed || windowed == _windowed)
+                return;
+            _windowed = windowed;
+            RW_SetFullscreen(windowed ? 0 : 1);
         }
 
         public override bool TryGetAccountProof(out string provider, out string data)
@@ -147,6 +161,8 @@ namespace RocketWars.Core
             _accountName = string.IsNullOrWhiteSpace(data.name) ? null : data.name.Trim();
             _inviteCode = ParseInviteCode(data.start);
             _authData = data.auth;
+            _canToggleWindowed = data.winToggle;
+            _windowed = data.windowed;
             _initialized = true;
             Debug.Log($"[RocketWars] platform {_id}: lang '{data.lang}', name '{_accountName}', start '{data.start}', cloud prefs {data.prefs?.Length ?? 0} chars");
             if (UsesCloudPrefs)
@@ -287,6 +303,8 @@ namespace RocketWars.Core
             public string prefs;
             public string start;
             public string auth; // Telegram: initData целиком (подпись проверяет сервер рейтинга)
+            public bool winToggle; // Telegram на компьютере: можно переключать «во весь экран / в окне»
+            public bool windowed;
         }
 
         [Serializable]
@@ -327,6 +345,8 @@ namespace RocketWars.Core
 
             void OnAdClosed(string rewarded) => _platform.OnAdClosed(rewarded == "1");
 
+            void OnWindowed(string windowed) => _platform._windowed = windowed == "1";
+
             // звук молчит, пока вкладка скрыта или идёт реклама. Игру не останавливаем — она сетевая
             void OnPause(string reason) => SetPaused(reason, true);
 
@@ -352,6 +372,7 @@ namespace RocketWars.Core
         [DllImport("__Internal")] static extern void RW_SavePrefs(string json);
         [DllImport("__Internal")] static extern void RW_OpenLink(string url);
         [DllImport("__Internal")] static extern void RW_Share(string url, string text);
+        [DllImport("__Internal")] static extern void RW_SetFullscreen(int on);
 #else
         // редактор: SDK нет — готовы сразу (без события: конструктор ещё не вернул Current), реклама сразу закрывается
         void RW_Init(string platform, string config) => _initialized = true;
@@ -361,6 +382,7 @@ namespace RocketWars.Core
         static void RW_SavePrefs(string json) { }
         static void RW_OpenLink(string url) => Application.OpenURL(url);
         static void RW_Share(string url, string text) => Application.OpenURL("https://t.me/share/url?url=" + Uri.EscapeDataString(url) + "&text=" + Uri.EscapeDataString(text));
+        static void RW_SetFullscreen(int on) { }
 #endif
     }
 }

@@ -65,6 +65,10 @@ namespace RocketWars.Launcher
         public Vector3 LoadedRocketCenter => transform.position + Vector3.up * LaunchHeight;
         public Vector3 LoadedRocketBottom => transform.position + Vector3.up * LoadedNozzleHeight;
         public int NetIndex { get; set; }
+        /// <summary>Сервер: сколько секунд сирены осталось до вылета (0 — не пускается).</summary>
+        public float SirenLeft => State == SiloState.Launching ? Mathf.Max(0f, (float)(_launchAt - NetClock.Now)) : 0f;
+        /// <summary>Сервер: куда полетит ракета, которая сейчас под сиреной.</summary>
+        public Vector3 PendingTarget => _pending.Target;
         public bool IsAuthority { get; set; } = true;
 
         /// <summary>Сервер: шахта уничтожена.</summary>
@@ -84,6 +88,9 @@ namespace RocketWars.Launcher
 
         Renderer[] _renderers;
         MeshRenderer _indicator;
+        MaterialPropertyBlock _indicatorProps;
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
         GameObject _loadedRocket;
         Light _sirenLight;
         AudioSource _sirenAudio;
@@ -266,6 +273,7 @@ namespace RocketWars.Launcher
             if (state == SiloState.Destroyed && !_burnt)
             {
                 _burnt = true;
+                _indicator.SetPropertyBlock(null); // иначе пульсация перекрасит обугленное кольцо
                 var burnt = RuntimeMaterials.Lit(new Color(0.15f, 0.13f, 0.12f));
                 foreach (var r in _renderers)
                 {
@@ -282,17 +290,31 @@ namespace RocketWars.Launcher
             }
         }
 
-        /// <summary>Зелёный — готова, жёлтый — готова через ≤5 с, красный — не готова (пуск, перезарядка).</summary>
+        /// <summary>
+        /// Зелёный — готова, жёлтый — готова через ≤5 с, красный — не готова (пуск, перезарядка).
+        /// Лампа мягко «дышит», чтобы читалась как индикатор: чем ближе к пуску, тем чаще.
+        /// </summary>
         void UpdateIndicator()
         {
             if (_burnt)
                 return; // у разрушенной шахты индикатор погас вместе с остальным
-            Color color = State == SiloState.Ready ? IndicatorGreen
-                : State == SiloState.Reloading && ReloadLeft <= AlmostReadyTime ? IndicatorYellow
-                : IndicatorRed;
+            Color color;
+            float period;
+            if (State == SiloState.Ready) { color = IndicatorGreen; period = 1.6f; }
+            else if (State == SiloState.Launching) { color = IndicatorRed; period = 0.4f; } // в такт сирене
+            else if (ReloadLeft <= AlmostReadyTime) { color = IndicatorYellow; period = 0.8f; }
+            else { color = IndicatorRed; period = 2.2f; }
+
             var mat = RuntimeMaterials.Emissive(color, IndicatorGlow);
             if (_indicator.sharedMaterial != mat)
                 _indicator.sharedMaterial = mat;
+
+            // своя фаза у каждой шахты — соседние лампы не мигают строем
+            float k = 0.5f - 0.5f * Mathf.Cos((Time.time / period + NetIndex * 0.37f) * Mathf.PI * 2f);
+            _indicatorProps ??= new MaterialPropertyBlock();
+            _indicatorProps.SetColor(BaseColorId, color * Mathf.Lerp(0.45f, 1f, k));
+            _indicatorProps.SetColor(EmissionColorId, color * (IndicatorGlow * Mathf.Lerp(0.15f, 1.35f, k)));
+            _indicator.SetPropertyBlock(_indicatorProps);
         }
 
         /// <summary>Если под площадкой 3×3 не осталось ни одного кубика — шахта падает и считается уничтоженной.</summary>

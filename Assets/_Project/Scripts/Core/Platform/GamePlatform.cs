@@ -88,6 +88,14 @@ namespace RocketWars.Core
 
         public virtual void Invite(string roomCode) { }
 
+        /// <summary>Переключатель «Оконный режим» в опциях: ПК-сборка и Telegram на компьютере (Telegram Desktop, web.telegram.org).</summary>
+        public virtual bool CanToggleWindowed => false;
+
+        /// <summary>Сейчас в окне (не во весь экран). Опрашивается, пока открыты опции: режим могут сменить и мимо игры.</summary>
+        public virtual bool IsWindowed => false;
+
+        public virtual void SetWindowed(bool windowed) { }
+
         /// <summary>
         /// Код комнаты из ссылки-приглашения, с которой открыли игру; отдаётся один раз (потом null),
         /// чтобы после выхода из комнаты меню не входило в неё снова.

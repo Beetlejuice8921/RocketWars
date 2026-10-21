@@ -77,6 +77,7 @@ namespace RocketWars.Core
         {
             Instance = this;
             _net = GetComponent<MatchNet>();
+            gameObject.AddComponent<Fx.AirDropPlane>(); // пролёт самолёта перед сбросом ящиков (только картинка)
         }
 
         public override void OnDestroy()
