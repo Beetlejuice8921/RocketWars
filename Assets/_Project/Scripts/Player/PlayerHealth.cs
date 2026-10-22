@@ -135,6 +135,13 @@ namespace RocketWars.Player
             _pendingName = displayName.Length > 28 ? displayName.Substring(0, 28) : displayName;
         }
 
+        /// <summary>Сервер: сменить ник (хост стрим-комнаты убрал неподходящее имя).</summary>
+        public void ServerSetName(string displayName)
+        {
+            if (IsServer)
+                _name.Value = new FixedString32Bytes(displayName.Length > 28 ? displayName.Substring(0, 28) : displayName);
+        }
+
         /// <summary>Сервер: перевести в другую команду (MatchNet.ServerSwitchTeam).</summary>
         public void ServerSetTeam(int team)
         {

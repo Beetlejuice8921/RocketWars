@@ -100,7 +100,7 @@ namespace RocketWars.Online
                 return null;
             }
             var s = match.State;
-            return new MatchReport { matchId = matchId, me = (long)me.NetworkObjectId, score0 = s.Score0, score1 = s.Score1, winner = s.Winner, rows = rows.ToArray() };
+            return new MatchReport { matchId = matchId, me = (long)me.NetworkObjectId, wins = match.WinsTarget, score0 = s.Score0, score1 = s.Score1, winner = s.Winner, rows = rows.ToArray() };
         }
 
         static async void Send(MatchReport report)

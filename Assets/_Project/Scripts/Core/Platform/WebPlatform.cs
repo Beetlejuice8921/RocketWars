@@ -24,7 +24,7 @@ namespace RocketWars.Core
         public const string TelegramAppUrl = "https://t.me/RocketWarsGameBot/play";
 
         /// <summary>Приставка параметра startapp у приглашения в комнату (остальные значения — на будущее, например рефералы).</summary>
-        const string InviteStartPrefix = "room_";
+        public const string InviteStartPrefix = "room_";
 
         /// <summary>
         /// Блоки рекламы Adsgram (partner.adsgram.ai → блок → blockId). Пусто — этот вид рекламы в Telegram не показывается,
@@ -85,7 +85,7 @@ namespace RocketWars.Core
         {
             if (!CanInvite || string.IsNullOrEmpty(roomCode))
                 return;
-            RW_Share($"{TelegramAppUrl}?startapp={InviteStartPrefix}{roomCode}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
+            RW_Share($"{InviteUrl(roomCode)}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
         }
 
         public override bool AllowsCtrl => _allowsCtrl;

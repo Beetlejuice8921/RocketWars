@@ -5,3 +5,7 @@ TOKEN_SECRET=local-dev-secret-change-me
 GUESTS_RANKED=1
 # не проверять длительность матча (тест test/smoke.mjs шлёт отчёты сразу)
 SKIP_DURATION_CHECK=1
+# бот: секрет вебхука, админы (Telegram ID через запятую) и подменный Telegram API для test/bot.mjs
+WEBHOOK_SECRET=local-webhook-secret
+ADMIN_IDS=100
+TELEGRAM_API=http://127.0.0.1:8790

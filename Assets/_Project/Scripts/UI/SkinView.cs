@@ -8,6 +8,7 @@ namespace RocketWars.UI
     /// <summary>
     /// Окно скинов из главного меню: по центру медленно вращается солдат в полный рост, внизу — ячейки скинов (Core/Skins)
     /// и заглушки «Скоро». Клик по ячейке выбирает скин (сохраняется сразу, в матче его видят все).
+    /// Скин-награда, пока не открыт, — серая ячейка: клик показывает, как его получить.
     /// Солдат и его камера создаются при открытии и удаляются при закрытии (как пьедестал — далеко за картой, свой слой).
     /// </summary>
     public class SkinView
@@ -17,6 +18,7 @@ namespace RocketWars.UI
 
         readonly VisualElement _screen, _figure;
         readonly Button[] _cells = new Button[Skins.Count];
+        readonly Label _hint;
         SkinStage _stage;
 
         public bool IsOpen => Ui.IsShown(_screen);
@@ -38,6 +40,7 @@ namespace RocketWars.UI
             }
             for (int i = Skins.Count; i < CellCount; i++)
                 Ui.Btn(list, Loc.T("Скоро"), null, "btn-small", "skin-cell", "skin-cell-locked").SetEnabled(false);
+            _hint = Ui.Text(panel, "", "label-dim", "skin-hint");
             MarkSelected();
 
             Ui.Btn(panel, Loc.T(TouchInput.Enabled ? "Закрыть" : "Закрыть (Esc)"), Close, "btn-primary");
@@ -47,7 +50,10 @@ namespace RocketWars.UI
         public void Open()
         {
             Ui.Show(_screen, true);
+            _hint.text = "";
             MarkSelected();
+            Skins.UnlockedChanged -= MarkSelected;
+            Skins.UnlockedChanged += MarkSelected; // награду открыли, пока окно открыто (вход завершился позже)
             _stage ??= new SkinStage(Skins.Selected);
             _figure.style.backgroundImage = Background.FromRenderTexture(_stage.Texture);
         }
@@ -62,6 +68,12 @@ namespace RocketWars.UI
 
         void Select(int skin)
         {
+            if (!Skins.IsUnlocked(skin))
+            {
+                _hint.text = Loc.F("Награда за игру на стриме у стримера-партнёра. Анонсы стримов присылает бот {0}", "@RocketWarsGameBot");
+                return;
+            }
+            _hint.text = "";
             Skins.Selected = skin;
             MarkSelected();
             _stage?.SetSkin(skin);
@@ -71,11 +83,15 @@ namespace RocketWars.UI
         {
             int selected = Skins.Selected;
             for (int i = 0; i < _cells.Length; i++)
+            {
                 _cells[i].EnableInClassList("btn-primary", i == selected);
+                _cells[i].EnableInClassList("skin-cell-locked", !Skins.IsUnlocked(i));
+            }
         }
 
         public void Dispose()
         {
+            Skins.UnlockedChanged -= MarkSelected;
             _stage?.Dispose();
             _stage = null;
             _figure.style.backgroundImage = StyleKeyword.None;

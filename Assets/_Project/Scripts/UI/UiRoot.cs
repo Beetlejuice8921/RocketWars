@@ -32,6 +32,8 @@ namespace RocketWars.UI
         LeaderboardView _leaderboard;
         HowToPlayView _howTo;
         SkinView _skins;
+        StreamView _stream;
+        StreamPanelView _streamPanel;
         TouchControls _touch;
         bool _pauseOpen;
         float _pauseOpenedAt;
@@ -82,10 +84,12 @@ namespace RocketWars.UI
             bool leaderboardOpen = _leaderboard != null && _leaderboard.IsOpen;
             bool skinsOpen = _skins != null && _skins.IsOpen;
             bool howToOpen = _howTo != null && _howTo.IsOpen;
+            bool streamPanelOpen = _streamPanel != null && _streamPanel.IsOpen;
             AudioListener.volume = Volume; // громкость могла прийти из облака площадки
             _hud?.Dispose();
             _results?.Dispose();
             _skins?.Dispose();
+            _stream?.Dispose();
 
             var root = GetComponent<UIDocument>().rootVisualElement;
             root.Clear();
@@ -99,7 +103,9 @@ namespace RocketWars.UI
             _hud = new HudView(root);
             _touch.Build(root);
             _results = new ResultsView(root);
+            _stream = new StreamView(root); // поверх итогов: QR стримера виден и между матчами
             _pause = new PauseView(root, () => SetPause(false));
+            _streamPanel = new StreamPanelView(root);
             _menu = new MainMenuView(root);
             _leaderboard = new LeaderboardView(root);
             _howTo = new HowToPlayView(root);
@@ -119,6 +125,8 @@ namespace RocketWars.UI
                 _skins.Open();
             if (howToOpen)
                 _howTo.Open();
+            if (streamPanelOpen)
+                _streamPanel.Open();
         }
 
         static bool _leaderboardArgDone;
@@ -131,11 +139,14 @@ namespace RocketWars.UI
 
         public void OpenHowToPlay() => _howTo.Open();
 
+        public void OpenStreamPanel() => _streamPanel.Open();
+
         void OnDestroy()
         {
             _hud?.Dispose();
             _results?.Dispose();
             _skins?.Dispose();
+            _stream?.Dispose();
             if (Instance == this)
                 Instance = null;
         }
@@ -184,7 +195,7 @@ namespace RocketWars.UI
             // на экране итогов HUD (здоровье, счёт, подсказки) не нужен — не просвечивает сквозь пьедестал
             _hud.SetVisible(inGame && !resultsModal);
             _pause.SetVisible(inGame && _pauseOpen);
-            _touch.SetVisible(inGame && !resultsModal && !_pauseOpen && !_options.IsOpen);
+            _touch.SetVisible(inGame && !resultsModal && !_pauseOpen && !_options.IsOpen && !_streamPanel.IsOpen);
             _results.SetMode(resultsModal ? ResultsView.Mode.Final : tabHeld ? ResultsView.Mode.Peek : ResultsView.Mode.Hidden,
                 () => _resultsDismissed = true);
 
@@ -196,8 +207,10 @@ namespace RocketWars.UI
             _results.Update();
             if (_options.IsOpen) _options.Update();
             if (_skins.IsOpen) _skins.Update();
+            _stream.Update(inGame, resultsModal);
+            if (_streamPanel.IsOpen) _streamPanel.Update();
 
-            CursorFree = !inGame || _pauseOpen || resultsModal || _options.IsOpen;
+            CursorFree = !inGame || _pauseOpen || resultsModal || _options.IsOpen || _streamPanel.IsOpen;
             UpdatePlatform(inGame, resultsModal);
         }
 
@@ -252,6 +265,12 @@ namespace RocketWars.UI
             {
                 if (kb.escapeKey.wasPressedThisFrame)
                     _howTo.Close();
+                return;
+            }
+            if (_streamPanel.IsOpen)
+            {
+                if (kb.escapeKey.wasPressedThisFrame)
+                    _streamPanel.Close();
                 return;
             }
             if (!inGame)

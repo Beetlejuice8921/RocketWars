@@ -72,6 +72,9 @@ namespace RocketWars.UI
             if (lan)
                 _actions.Add(Ui.Btn(createRow, Loc.T("В локальной сети"), CreateLan, "btn-primary", "grow"));
             _actions.Add(Ui.Btn(createRow, Loc.T(lan ? "В интернете" : "Создать комнату"), CreateInternet, "btn-primary", "grow"));
+            // стример играет с подписчиками: закрытая комната с QR-кодом, очередью и управлением
+            var streamRow = Ui.El(panel, "row", "row-center");
+            _actions.Add(Ui.Btn(streamRow, Loc.T("Комната для стрима"), CreateStream, "btn-small"));
 
             Ui.Text(panel, Loc.T("ПОИСК КОМНАТЫ"), "section");
             _list = new ScrollView(ScrollViewMode.Vertical);
@@ -286,6 +289,13 @@ namespace RocketWars.UI
             _joiningByCode = false;
             SetBusy(Loc.T("Создаём комнату…"));
             Net.CreateInternetSession(OnAsyncDone);
+        }
+
+        void CreateStream()
+        {
+            _joiningByCode = false;
+            SetBusy(Loc.T("Создаём комнату…"));
+            Net.CreateInternetSession(OnAsyncDone, true);
         }
 
         void JoinCode(string code)

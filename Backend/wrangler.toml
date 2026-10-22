@@ -11,3 +11,10 @@ database_id = "fc4593ae-4202-43c2-9c97-0ddfaf54be11"
 
 # секреты (не в репозитории): npx wrangler secret put BOT_TOKEN / TOKEN_SECRET
 # локально — файл .dev.vars (см. .dev.vars.example)
+
+# раз в минуту: рассылка бота пачками и итоги закончившихся стримов (src/bot.js)
+[triggers]
+crons = ["* * * * *"]
+
+# секреты бота: WEBHOOK_SECRET (deploy.ps1 создаёт сам), ADMIN_IDS — Telegram ID админов через запятую
+# необязательно: OUTBOX_BATCH — сообщений за минуту (по умолчанию 40; на платном тарифе можно до 1000)

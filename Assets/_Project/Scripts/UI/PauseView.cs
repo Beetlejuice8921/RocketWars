@@ -15,6 +15,7 @@ namespace RocketWars.UI
         readonly Label _switchBlocker;
         readonly Label _room;
         readonly Button _invite;
+        readonly Button _streamPanel;
 
         public PauseView(VisualElement root, Action resume)
         {
@@ -27,6 +28,8 @@ namespace RocketWars.UI
             _invite = Ui.Btn(panel, Loc.T("Позвать друга"), () => GamePlatform.Current.Invite(SessionService.Current?.Code));
 
             Ui.Btn(panel, Loc.T("Продолжить"), resume, "btn-primary");
+            // стрим-комната: очередь, места, кик и бан зрителей
+            _streamPanel = Ui.Btn(panel, Loc.T("Управление стримом"), () => UiRoot.Instance?.OpenStreamPanel());
             _start = Ui.Btn(panel, Loc.T("Начать матч"), () =>
             {
                 MatchManager.Instance?.RequestStartMatch();
@@ -67,6 +70,8 @@ namespace RocketWars.UI
             var session = SessionService.Current;
             _room.text = session != null ? Loc.F("Код комнаты: {0}", session.Code) : Loc.T("Комната в локальной сети");
             Ui.Show(_invite, session != null && GamePlatform.Current.CanInvite);
+            var net = MatchNet.Instance;
+            Ui.Show(_streamPanel, net != null && net.IsSpawned && net.IsServer && net.IsStream);
         }
 
         /// <summary>

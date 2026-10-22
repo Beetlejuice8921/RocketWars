@@ -31,6 +31,9 @@ namespace RocketWars.Online
 
         public static bool SignedIn => _token != null;
 
+        /// <summary>Вошёл аккаунтом площадки (Telegram), а не гостем: стримы, анонсы и награды — только так.</summary>
+        public static bool Verified { get; private set; }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
@@ -79,6 +82,8 @@ namespace RocketWars.Online
             var response = JsonUtility.FromJson<AuthResponse>(text);
             _token = response.token;
             Ranked = response.ranked;
+            Verified = response.verified;
+            Skins.SetUnlocked(response.skins);
             Debug.Log($"[RocketWars] rating: signed in as {request.provider} #{response.playerId}, ranked {Ranked}");
             return true;
         }
@@ -142,6 +147,46 @@ namespace RocketWars.Online
             return board;
         }
 
+        // ---------- стримы (Backend/src/bot.js) ----------
+
+        /// <summary>Стример открыл стрим-комнату (и потом «я ещё тут»); null — нет связи или вход гостем.</summary>
+        public static async Task<StreamInfo> StreamOpen(string roomCode)
+        {
+            if (!await EnsureAuth() || !Verified)
+                return null;
+            var (ok, text) = await Send("POST", "/v1/stream/open", JsonUtility.ToJson(new StreamRequest { roomCode = roomCode }), true);
+            return ok ? JsonUtility.FromJson<StreamInfo>(text) : null;
+        }
+
+        /// <summary>Анонс подписчикам бота: soon — «через 15 минут», иначе «играю прямо сейчас». error — код отказа сервера.</summary>
+        public static async Task<(StreamInfo info, string error)> StreamAnnounce(bool soon)
+        {
+            if (!await EnsureAuth() || !Verified)
+                return (null, "no_auth");
+            var (ok, text) = await Send("POST", "/v1/stream/announce", JsonUtility.ToJson(new AnnounceRequest { kind = soon ? "soon" : "now" }), true);
+            if (ok)
+                return (JsonUtility.FromJson<StreamInfo>(text), null);
+            ErrorResponse error = default;
+            try { error = JsonUtility.FromJson<ErrorResponse>(text ?? ""); }
+            catch (Exception) { } // не JSON: нет связи
+            return (null, string.IsNullOrEmpty(error.error) ? "network" : error.error);
+        }
+
+        /// <summary>Стример вышел из стрим-комнаты: стрим закончен, игрокам — итоги.</summary>
+        public static async Task StreamClose()
+        {
+            if (_token != null && Verified)
+                await Send("POST", "/v1/stream/close", "{}", true);
+        }
+
+        /// <summary>Игрок доиграл матч в стрим-комнате: место на пьедестале и победа команды.</summary>
+        public static async Task StreamPlayed(string roomCode, int place, bool won)
+        {
+            if (!await EnsureAuth() || !Verified)
+                return;
+            await Send("POST", "/v1/stream/played", JsonUtility.ToJson(new PlayedRequest { roomCode = roomCode, place = place, won = won }), true);
+        }
+
         // ---------- HTTP ----------
 
         static async Task<(bool ok, string text)> Send(string method, string path, string json, bool withToken)
@@ -170,9 +215,24 @@ namespace RocketWars.Online
         // ---------- данные (поля — как в JSON сервера) ----------
 
         [Serializable] struct AuthRequest { public string provider, data; }
-        [Serializable] struct AuthResponse { public string token; public long playerId; public bool verified, ranked; }
+        [Serializable] struct AuthResponse { public string token; public long playerId; public bool verified, ranked; public int[] skins; }
+        [Serializable] struct StreamRequest { public string roomCode; }
+        [Serializable] struct AnnounceRequest { public string kind; }
+        [Serializable] struct PlayedRequest { public string roomCode; public int place; public bool won; }
+        [Serializable] struct ErrorResponse { public string error; }
         [Serializable] struct StartRequest { public string platform; }
         [Serializable] struct StartResponse { public string matchId; }
+    }
+
+    /// <summary>Стрим стримера-партнёра: partner = false — стрим-комната без анонсов и наград.</summary>
+    [Serializable]
+    public class StreamInfo
+    {
+        public bool partner;
+        public string streamId, name;
+        public int announcesLeft;
+        public int nextAnnounceIn; // секунд до следующего возможного анонса
+        public int queued;         // ответ на анонс: скольким подписчикам поставлен в очередь
     }
 
     [Serializable]
@@ -180,6 +240,7 @@ namespace RocketWars.Online
     {
         public string matchId;
         public long me;
+        public int wins; // до скольких побед шёл матч (стрим-комната — короче)
         public int score0, score1, winner;
         public ReportRow[] rows;
     }

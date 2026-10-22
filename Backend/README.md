@@ -48,6 +48,39 @@ Cloudflare Worker `rocketwars-api` + база D1 `rocketwars`. Бесплатн�
 | `GET /v1/match/result?matchId=` | то же состояние (клиент опрашивает, пока `pending`) |
 | `GET /v1/leaderboard?season=week\|all&limit=50` | `{season, resetsIn, top[], me}`; без токена — без `me` |
 
+## Бот и стримы (`src/bot.js`)
+
+Бот **@RocketWarsGameBot** работает через вебхук этого же Worker (`POST /tg/webhook`, секрет `WEBHOOK_SECRET`).
+
+**Кому бот пишет** (`subscribers`): тем, кто нажал `/start`, и тем, кто разрешил боту писать из Mini App
+(`allows_write_to_pm` в initData при входе). `/stop` или блокировка бота — отписка.
+
+**Команды для всех:** `/start` (с `room_КОД` — сразу кнопка в комнату), `/room КОД`, `/stream` (кто сейчас стримит),
+`/stop`, `/id` (свой Telegram ID). **Админу** (`ADMIN_IDS`): `/streamer_add <tg_id> <ссылка на канал или -> <имя>`,
+`/streamer_del <tg_id>`, `/streamers`, `/broadcast <текст>`, `/stats`.
+
+**Стрим.** Стример-партнёр (есть в `streamers`) создаёт в игре «Комнату для стрима» → игра вызывает
+`/v1/stream/open` (и раз в 5 минут — «я ещё тут»). В окне «Управление стримом» — анонс подписчикам:
+«через 15 минут» или «уже в эфире» (кнопки «Войти в комнату» и «Смотреть стрим»); не больше 3 за стрим и раз в 10 минут.
+Игроки после каждого матча сообщают место на пьедестале (`/v1/stream/played`). Стример вышел из комнаты
+(или 20 минут тишины) — стрим закончен: каждому сыгравшему с аккаунтом Telegram — итоги (матчи, победы, лучшее место)
+и скин-награда «Зритель стрима» (`player_skins`, номер 3 в `Core/Skins.cs`; приходит в ответе на вход).
+Не партнёр тоже может открыть стрим-комнату — просто без анонсов и наград.
+
+**Рассылка** ставится в `outbox`, cron (раз в минуту) отправляет по `OUTBOX_BATCH` сообщений (по умолчанию 40 —
+бесплатный Worker делает до 50 запросов наружу за запуск, это ~2400 сообщений в час). На платном тарифе можно
+поднять до 1000: `npx wrangler secret put OUTBOX_BATCH`.
+
+| Запрос | Что делает |
+|---|---|
+| `POST /v1/stream/open` `{roomCode}` | `{partner, streamId, name, announcesLeft, nextAnnounceIn}` |
+| `POST /v1/stream/announce` `{kind: now\|soon}` | то же + `queued`; 403 — не партнёр, 429 — лимит |
+| `POST /v1/stream/close` | стрим закончен, итоги — в очередь |
+| `POST /v1/stream/played` `{roomCode, place, won}` | `{status: ok\|guest\|no_stream}` |
+| `POST /tg/setup` (заголовок `X-Setup-Key`) | вебхук + меню команд (вызывает deploy.ps1) |
+
+Матчи стрим-комнаты короче (до 1–4 побед, поле `wins` отчёта) — очки за них пропорционально меньше.
+
 ## Выкладка
 
 ```
@@ -56,6 +89,8 @@ powershell -ExecutionPolicy Bypass -File Backend\deploy.ps1
 
 В первый раз скрипт создаст базу D1, запишет её id в `wrangler.toml` (закоммитьте), применит `schema.sql`,
 выложит Worker, создаст секрет `TOKEN_SECRET` и спросит **токен бота** (`BOT_TOKEN`, из @BotFather).
+Потом настроит бота: секрет `WEBHOOK_SECRET`, вебхук на Worker, меню команд — и спросит **ваш Telegram ID**
+(`ADMIN_IDS`; узнать — команда `/id` боту). Настроить бота заново: `deploy.ps1 -SetupBot`.
 Адрес сервера зашит в `RatingApi.DefaultUrl`: `https://rocketwars-api.tg-placeholder.workers.dev` —
 если поддомен аккаунта поменяется, поправьте его там.
 
@@ -68,6 +103,9 @@ npx wrangler d1 execute rocketwars --local --persist-to .wrangler/state --file s
 npx wrangler dev --persist-to .wrangler/state --port 8787
 node test/smoke.mjs
 ```
+
+Бот: в `.dev.vars` — `WEBHOOK_SECRET`, `ADMIN_IDS=100` и `TELEGRAM_API=http://127.0.0.1:8790` (подменный Telegram из теста);
+`wrangler dev` запускать с `--test-scheduled` (тест дёргает cron через `/__scheduled`), потом `node test/bot.mjs`.
 
 Игра на локальный сервер: аргумент `-api http://127.0.0.1:8787` (или переменная окружения `RW_API_URL`).
 В `.dev.vars` гости считаются как Telegram-аккаунты (`GUESTS_RANKED=1`), а длительность матча не проверяется,

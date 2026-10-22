@@ -62,3 +62,72 @@ CREATE TABLE IF NOT EXISTS scores (
   PRIMARY KEY (player_id, season)
 );
 CREATE INDEX IF NOT EXISTS scores_rank ON scores (season, points DESC);
+
+-- ---------- бот и стримы ----------
+
+-- кому бот может писать: нажал /start в боте или разрешил боту писать из Mini App (allows_write_to_pm)
+CREATE TABLE IF NOT EXISTS subscribers (
+  tg_id      TEXT    PRIMARY KEY,
+  name       TEXT    NOT NULL DEFAULT '',
+  lang       TEXT    NOT NULL DEFAULT 'ru', -- ru | en (язык сообщений бота)
+  active     INTEGER NOT NULL DEFAULT 1,    -- 0 — /stop или бот заблокирован
+  source     TEXT    NOT NULL DEFAULT '',   -- bot | webapp
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS subscribers_active ON subscribers (active, lang);
+
+-- стримеры-партнёры: только они делают анонсы на всех подписчиков (добавляет админ командой бота)
+CREATE TABLE IF NOT EXISTS streamers (
+  tg_id       TEXT    PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  channel_url TEXT    NOT NULL DEFAULT '',
+  added_at    INTEGER NOT NULL
+);
+
+-- стрим: стример открыл стрим-комнату; итоги рассылаются, когда он её закрыл (или пропал)
+CREATE TABLE IF NOT EXISTS streams (
+  id            TEXT    PRIMARY KEY,
+  streamer_tg   TEXT    NOT NULL,
+  room_code     TEXT    NOT NULL,
+  started_at    INTEGER NOT NULL,
+  last_seen     INTEGER NOT NULL,          -- игра стримера отмечается раз в несколько минут
+  announces     INTEGER NOT NULL DEFAULT 0,
+  last_announce INTEGER NOT NULL DEFAULT 0,
+  ended_at      INTEGER,
+  results_sent  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS streams_room ON streams (room_code, ended_at);
+CREATE INDEX IF NOT EXISTS streams_streamer ON streams (streamer_tg, ended_at);
+
+-- кто играл на стриме (только аккаунты Telegram): для итогов и наградного скина
+CREATE TABLE IF NOT EXISTS stream_players (
+  stream_id  TEXT    NOT NULL,
+  player_id  INTEGER NOT NULL,
+  tg_id      TEXT    NOT NULL,
+  matches    INTEGER NOT NULL DEFAULT 0,
+  wins       INTEGER NOT NULL DEFAULT 0,
+  best_place INTEGER NOT NULL DEFAULT 99,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (stream_id, player_id)
+);
+
+-- исходящие сообщения бота: рассылка ставится сюда, cron отправляет пачками (лимиты Telegram и Cloudflare)
+CREATE TABLE IF NOT EXISTS outbox (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id    TEXT    NOT NULL,
+  text       TEXT    NOT NULL,
+  markup     TEXT,
+  kind       TEXT    NOT NULL DEFAULT '',
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+-- скины-награды (номера Core/Skins), выданные аккаунту
+CREATE TABLE IF NOT EXISTS player_skins (
+  player_id  INTEGER NOT NULL,
+  skin       INTEGER NOT NULL,
+  source     TEXT    NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (player_id, skin)
+);

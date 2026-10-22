@@ -5,7 +5,7 @@ namespace RocketWars.Core
     /// <summary>
     /// Мягкий режим межстраничной рекламы: пока цель — рост аудитории, реклама не должна отпугивать.
     /// Показ — только после итогов матча (не раунда, не при выходе в меню), новичкам первые матчи без рекламы,
-    /// и не чаще одного раза за MinInterval (отсчёт и от запуска игры).
+    /// и не чаще одного раза за MinInterval (отсчёт и от запуска игры). В стрим-комнате рекламы нет совсем.
     /// </summary>
     public static class AdPolicy
     {
@@ -28,6 +28,9 @@ namespace RocketWars.Core
             PlayerPrefs.Save();
 
             if (matches <= FreeMatches)
+                return;
+            // стрим-комната — без рекламы ни у стримера, ни у зрителей: реклама в эфире и паузы сбивают темп
+            if (Net.MatchNet.Instance != null && Net.MatchNet.Instance.IsSpawned && Net.MatchNet.Instance.IsStream)
                 return;
             if (Time.realtimeSinceStartup - _lastShown < MinInterval)
                 return;

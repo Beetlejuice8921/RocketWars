@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RocketWars.Core
@@ -17,10 +19,15 @@ namespace RocketWars.Core
     /// Скины солдата — только перекраска (в сборку добавляют лишь эти цвета).
     /// Номер скина синхронизируется по сети (PlayerHealth.Skin), выбор игрока хранится в PlayerPrefs.
     /// Новые скины добавлять только в КОНЕЦ списка: номер уходит в сеть и в сохранения.
+    /// Скины-награды (<see cref="StreamViewer"/>) открывает сервер (Backend: player_skins) — список приходит при входе.
     /// </summary>
     public static class Skins
     {
         const string PrefKey = "skin";
+        const string UnlockedKey = "unlockedSkins";
+
+        /// <summary>Награда за игру на стриме у стримера-партнёра (Backend/src/bot.js STREAM_SKIN).</summary>
+        public const int StreamViewer = 3;
 
         static readonly SkinPalette[] All =
         {
@@ -66,7 +73,67 @@ namespace RocketWars.Core
                 Boot = Hex(0x111113),
                 Glove = Hex(0x1A1A1E),
             },
+            // 3 — награда за стрим: фиолетовый камуфляж «как на Twitch»
+            new SkinPalette
+            {
+                NameKey = "Зритель стрима",
+                CamoBase = Hex(0x5B3A9A),
+                CamoDark = Hex(0x2E1D52),
+                CamoWarm = Hex(0x7A52C7),
+                CamoLight = Hex(0xA98BE0),
+                Helmet = Hex(0x4A2F80),
+                Leather = Hex(0x2A1F3A),
+                Buckle = Hex(0xC8B8E8),
+                Boot = Hex(0x18121F),
+                Glove = Hex(0x2A2038),
+            },
         };
+
+        static HashSet<int> _unlocked;
+
+        /// <summary>Сервер прислал другой список открытых наград — окно скинов обновляется.</summary>
+        public static event Action UnlockedChanged;
+
+        /// <summary>Награда (не открыта всем сразу).</summary>
+        public static bool IsReward(int skin) => skin == StreamViewer;
+
+        public static bool IsUnlocked(int skin) => !IsReward(skin) || Unlocked.Contains(skin);
+
+        // список хранится и на устройстве: без связи с сервером награда не пропадает
+        static HashSet<int> Unlocked
+        {
+            get
+            {
+                if (_unlocked != null)
+                    return _unlocked;
+                _unlocked = new HashSet<int>();
+                foreach (var part in PlayerPrefs.GetString(UnlockedKey, "").Split(','))
+                    if (int.TryParse(part, out int skin))
+                        _unlocked.Add(skin);
+                return _unlocked;
+            }
+        }
+
+        /// <summary>Открытые награды аккаунта — ответ сервера при входе.</summary>
+        public static void SetUnlocked(int[] skins)
+        {
+            var set = new HashSet<int>(skins ?? Array.Empty<int>());
+            if (set.SetEquals(Unlocked))
+                return;
+            _unlocked = set;
+            PlayerPrefs.SetString(UnlockedKey, string.Join(",", set));
+            PlayerPrefs.Save();
+            UnlockedChanged?.Invoke();
+        }
+
+        /// <summary>Случайный скин для бота — из открытых всем (награды только у людей).</summary>
+        public static int RandomForBot()
+        {
+            int skin;
+            do skin = UnityEngine.Random.Range(0, All.Length);
+            while (IsReward(skin));
+            return skin;
+        }
 
         public static int Count => All.Length;
 
@@ -79,7 +146,7 @@ namespace RocketWars.Core
             get
             {
                 int skin = PlayerPrefs.GetInt(PrefKey, 0);
-                return skin >= 0 && skin < All.Length ? skin : 0;
+                return skin >= 0 && skin < All.Length && IsUnlocked(skin) ? skin : 0;
             }
             set => PlayerPrefs.SetInt(PrefKey, Mathf.Clamp(value, 0, All.Length - 1));
         }

@@ -1514,3 +1514,150 @@
 .touch-mode .leaderboard-panel { width: 94%; }
 .touch-mode .leaderboard-list { max-height: 300px; }
 .touch-mode .lb-num { width: 100px; }
+/* ---------- стрим-комната ---------- */
+
+/* QR-код у стримера: слева, под кодом комнаты; между матчами крупно, в раунде — компактно */
+.stream-qr {
+    position: absolute;
+    left: 24px;
+    top: 150px;
+    padding: 10px;
+    align-items: center;
+    background-color: rgba(28, 32, 40, 0.9);
+    border-width: 3px;
+    border-color: rgb(255, 150, 30);
+}
+
+.stream-qr-title {
+    font-size: 14px;
+    color: rgb(255, 150, 30);
+    margin-bottom: 8px;
+    -unity-text-align: middle-center;
+}
+
+.stream-qr-image {
+    width: 196px;
+    height: 196px;
+    background-color: rgb(255, 255, 255);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.stream-qr-code {
+    font-size: 16px;
+    margin-top: 8px;
+    -unity-text-align: middle-center;
+}
+
+.stream-qr-queue {
+    font-size: 11px;
+    color: rgb(170, 182, 200);
+    margin-top: 6px;
+    -unity-text-align: middle-center;
+}
+
+.stream-qr--compact {
+    padding: 6px;
+    border-width: 2px;
+}
+
+/* итоги матча: компактно в левом нижнем углу, под таблицей и левее пьедестала */
+.stream-qr--corner {
+    top: auto;
+    left: 8px;
+    bottom: 8px;
+}
+
+.stream-qr--compact .stream-qr-title { font-size: 9px; margin-bottom: 4px; }
+.stream-qr--compact .stream-qr-image { width: 112px; height: 112px; }
+.stream-qr--compact .stream-qr-code { font-size: 10px; margin-top: 4px; }
+.stream-qr--compact .stream-qr-queue { font-size: 8px; margin-top: 3px; }
+
+/* зритель в очереди: плашка сверху по центру */
+.stream-wait {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 120px;
+    align-items: center;
+}
+
+.stream-wait-place {
+    font-size: 24px;
+    color: rgb(255, 150, 30);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(0, 0, 0);
+    -unity-text-align: middle-center;
+}
+
+.stream-wait-note {
+    font-size: 13px;
+    margin-top: 10px;
+    white-space: normal;
+    max-width: 820px;
+    -unity-text-align: middle-center;
+}
+
+/* окно «Управление стримом» */
+.stream-panel {
+    width: 900px;
+    max-height: 94%;
+    background-color: rgb(28, 32, 40);
+}
+
+.stream-panel-code {
+    -unity-text-align: middle-center;
+    margin-bottom: 8px;
+}
+
+.stream-stepper {
+    font-size: 12px;
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.stream-step {
+    width: 44px;
+    padding: 0;
+    font-size: 14px;
+}
+
+.stream-step-value {
+    width: 48px;
+    font-size: 14px;
+    -unity-text-align: middle-center;
+}
+
+.stream-toggles {
+    margin-top: 6px;
+}
+
+.stream-list {
+    background-color: rgba(0, 0, 0, 0.25);
+    padding: 2px 6px;
+}
+
+.stream-row {
+    border-bottom-width: 1px;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.stream-name {
+    font-size: 11px;
+    overflow: hidden;
+}
+
+.touch-mode .stream-qr { top: 160px; }
+.touch-mode .stream-panel { width: 96%; }
+.touch-mode .stream-wait { top: 150px; }
+
+.stream-announce-note {
+    white-space: normal;
+    margin: 4px;
+}
+
+.skin-hint {
+    white-space: normal;
+    -unity-text-align: middle-center;
+    max-width: 640px;
+    margin-bottom: 8px;
+}

@@ -71,6 +71,7 @@ namespace RocketWars.Core
         public event Action<int> MatchEnded;
 
         MatchNet _net;
+        bool _startPending; // стрим-комната: состав сменился, матч начнётся на следующем кадре
         double _airDropAt = double.MaxValue; // сервер: когда сбросить ящики в текущем раунде
 
         void Awake()
@@ -107,11 +108,25 @@ namespace RocketWars.Core
 
         public bool CanStartMatch => Phase == MatchPhase.Lobby || Phase == MatchPhase.MatchEnd;
 
+        /// <summary>Побед для выигрыша матча: в стрим-комнате — сколько выбрал хост (короче матч — быстрее очередь).</summary>
+        public int WinsTarget => _net != null && _net.IsSpawned && _net.IsStream ? Mathf.Max(1, (int)_net.Stream.WinsNeeded) : WinsNeeded;
+
         /// <summary>Хост нажал «Начать матч».</summary>
         public void RequestStartMatch()
         {
-            if (!IsServer || !CanStartMatch || StartBlocker() != null)
+            if (!IsServer || !CanStartMatch || StartBlocker() != null || _startPending)
                 return;
+            // стрим-комната: сыгравшие уступают места очереди; удалённые игроки исчезнут к следующему кадру
+            if (_net.ServerRotateQueue(Phase == MatchPhase.MatchEnd))
+            {
+                _startPending = true;
+                return;
+            }
+            StartMatchNow();
+        }
+
+        void StartMatchNow()
+        {
             var s = new MatchState { Round = 0, Winner = -1 };
             _state.Value = s;
             MatchStarted?.Invoke();
@@ -151,6 +166,13 @@ namespace RocketWars.Core
             if (!IsServer || !IsSpawned)
                 return;
 
+            if (_startPending)
+            {
+                _startPending = false;
+                if (CanStartMatch && StartBlocker() == null)
+                    StartMatchNow();
+            }
+
             var s = _state.Value;
             double now = NetClock.Now;
             switch (s.Phase)
@@ -185,10 +207,11 @@ namespace RocketWars.Core
                     break;
 
                 case MatchPhase.RoundEnd when now >= s.PhaseEnd:
-                    if (s.Score0 >= WinsNeeded || s.Score1 >= WinsNeeded)
+                    int wins = WinsTarget;
+                    if (s.Score0 >= wins || s.Score1 >= wins)
                     {
                         s.Phase = MatchPhase.MatchEnd;
-                        s.Winner = (sbyte)(s.Score0 >= WinsNeeded ? 0 : 1);
+                        s.Winner = (sbyte)(s.Score0 >= wins ? 0 : 1);
                         _state.Value = s;
                         Debug.Log($"[RocketWars] Match winner {s.Winner}, score {s.Score0}:{s.Score1}");
                         MatchEnded?.Invoke(s.Winner);

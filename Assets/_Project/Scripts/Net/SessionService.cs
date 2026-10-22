@@ -34,19 +34,20 @@ namespace RocketWars.Net
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
         }
 
-        public static async Task<ISession> CreateAsync(string name, int maxPlayers)
+        /// <summary>stream — стрим-комната: не видна в списке (вход по ссылке или коду) и всегда по WebSocket.</summary>
+        public static async Task<ISession> CreateAsync(string name, int maxPlayers, bool stream)
         {
             await EnsureSignedInAsync();
             var options = new SessionOptions
             {
                 Name = name,
                 MaxPlayers = maxPlayers,
-                IsPrivate = false,
+                IsPrivate = stream,
                 SessionProperties =
                 {
                     [TagProperty] = new SessionProperty(NetProtocol.Tag, VisibilityPropertyOptions.Public, PropertyIndex.String1)
                 }
-            }.WithRelayNetwork().WithNetworkOptions(NetworkSettings());
+            }.WithRelayNetwork().WithNetworkOptions(NetworkSettings(stream));
             Current = await MultiplayerService.Instance.CreateSessionAsync(options);
             return Current;
         }
@@ -78,9 +79,9 @@ namespace RocketWars.Net
         }
 
         /// <summary>Протокол Relay: в браузере только WebSocket (wss), на ПК — DTLS, как было по умолчанию.</summary>
-        static NetworkOptions NetworkSettings() => new NetworkOptions
+        static NetworkOptions NetworkSettings(bool webSockets = false) => new NetworkOptions
         {
-            RelayProtocol = GamePlatform.Current.IsWeb ? RelayProtocol.WSS : RelayProtocol.DTLS
+            RelayProtocol = GamePlatform.Current.IsWeb || webSockets ? RelayProtocol.WSS : RelayProtocol.DTLS
         };
 
         static JoinSessionOptions JoinOptions() => new JoinSessionOptions().WithNetworkOptions(NetworkSettings());

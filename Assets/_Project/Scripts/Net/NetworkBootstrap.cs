@@ -11,7 +11,8 @@ namespace RocketWars.Net
     /// <summary>
     /// Запуск сети: хост/клиент по LAN (IP) или через Unity Sessions (Internet), одобрение подключений,
     /// имена игроков, обработка разрыва (выход хоста → клиенты возвращаются в меню).
-    /// Аргументы командной строки: -host, -join &lt;ip&gt;, -joincode &lt;код&gt;, -name &lt;имя&gt;, -bots.
+    /// Аргументы командной строки: -host, -join &lt;ip&gt;, -joincode &lt;код&gt;, -name &lt;имя&gt;, -bots;
+    /// dev-сборки: -streamhost [-slots N] (стрим-комната), -streamtest [-expect N] [-shot папка], -deviceKey &lt;ключ&gt;.
     /// </summary>
     [RequireComponent(typeof(NetworkManager), typeof(UnityTransport))]
     public class NetworkBootstrap : MonoBehaviour
@@ -101,16 +102,20 @@ namespace RocketWars.Net
         public static string GetPlayerName(ulong clientId) =>
             Names.TryGetValue(clientId, out var name) ? name : $"Player{clientId}";
 
+        /// <summary>Сервер: хост сменил ник игроку (стрим-комната, кнопка «Имя»).</summary>
+        public static void SetPlayerName(ulong clientId, string name) => Names[clientId] = name;
+
         void SetPayload()
         {
             EnsureSingleton();
-            Manager.NetworkConfig.ConnectionData = NetProtocol.BuildPayload(PlayerName);
+            Manager.NetworkConfig.ConnectionData = NetProtocol.BuildPayload(PlayerName, PlayerIdentity.Key);
         }
 
         // ---------- LAN ----------
 
         public bool StartLanHost()
         {
+            StreamHost.Begin(false);
             SetPayload();
             // при неудаче StartHost сам всё освобождает, так что можно сразу пробовать следующий порт;
             // клиенты узнают реальный порт из LAN-рассылки (или вводят «IP:порт»)
@@ -143,12 +148,23 @@ namespace RocketWars.Net
 
         // ---------- Internet (Unity Sessions) ----------
 
-        public async void CreateInternetSession(Action<string> onDone)
+        /// <summary>
+        /// Интернет-комната. stream — стрим-комната: закрытая (не видна в списке, вход по ссылке, QR или коду),
+        /// до <see cref="StreamHost.MaxConnections"/> подключений с очередью, и всегда по WebSocket — чтобы зрители
+        /// из Telegram (браузер) могли зайти и к стримеру, играющему в ПК-версию.
+        /// </summary>
+        public async void CreateInternetSession(Action<string> onDone, bool stream = false)
         {
             try
             {
+                StreamHost.Begin(stream);
                 SetPayload();
-                var session = await SessionService.CreateAsync($"{PlayerName}'s room", MaxPlayers);
+                if (stream)
+                    _transport.UseWebSockets = true;
+                string name = NameFilter.IsBad(PlayerName) ? "Rocket Wars" : PlayerName;
+                var session = stream
+                    ? await SessionService.CreateAsync($"{name} · STREAM", StreamHost.MaxConnections, true)
+                    : await SessionService.CreateAsync($"{name}'s room", MaxPlayers, false);
                 onDone?.Invoke(null);
                 Debug.Log($"[RocketWars] Session created, code {session.Code}");
             }
@@ -171,7 +187,15 @@ namespace RocketWars.Net
             catch (Exception e)
             {
                 Debug.LogException(e);
-                onDone?.Invoke(SessionService.Describe(e));
+                // хост отказал при одобрении (бан, закрытый вход, другая версия) — Sessions сообщает лишь «не удалось
+                // запустить сеть», а настоящая причина (русский ключ Loc) осталась в DisconnectReason
+                // (если хост уже отключил нас с причиной — она в LastMessage, меню покажет её, а не ошибку Sessions)
+                string reason = Manager != null ? Manager.DisconnectReason : null;
+                Debug.Log($"[RocketWars] join failed, disconnect reason: {reason ?? "-"}");
+                if (_leaving && !string.IsNullOrEmpty(LastMessage))
+                    onDone?.Invoke(LastMessage);
+                else
+                    onDone?.Invoke(!string.IsNullOrEmpty(reason) && !reason.StartsWith("[") ? Loc.T(reason) : SessionService.Describe(e));
             }
         }
 
@@ -180,7 +204,7 @@ namespace RocketWars.Net
         void Approve(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
             response.CreatePlayerObject = false;
-            NetProtocol.ParsePayload(request.Payload, out int version, out string name);
+            NetProtocol.ParsePayload(request.Payload, out int version, out string name, out string identity);
             // свой (локальный) клиент хоста — всегда той же версии
             if (request.ClientNetworkId != NetworkManager.ServerClientId && version != NetProtocol.Version)
             {
@@ -190,16 +214,26 @@ namespace RocketWars.Net
                 return;
             }
 
-            response.Approved = Manager.ConnectedClientsIds.Count < MaxPlayers;
+            // стрим-комната: забаненные и закрытый вход
+            string rejection = request.ClientNetworkId != NetworkManager.ServerClientId ? StreamHost.Rejection(identity) : null;
+            if (rejection != null)
+            {
+                Debug.Log($"[RocketWars] client {request.ClientNetworkId} rejected: {rejection}");
+                StreamHost.RejectAfterConnect(request.ClientNetworkId, rejection);
+            }
+
+            response.Approved = Manager.ConnectedClientsIds.Count < (StreamHost.Enabled ? StreamHost.MaxConnections : MaxPlayers);
             if (!response.Approved)
             {
                 response.Reason = "Комната заполнена";
                 return;
             }
 
-            if (string.IsNullOrEmpty(name))
+            // мат и оскорбления в нике не показываем никому (на стриме — тем более)
+            if (string.IsNullOrWhiteSpace(name) || NameFilter.IsBad(name))
                 name = $"Player{request.ClientNetworkId}";
             Names[request.ClientNetworkId] = name.Length > 24 ? name.Substring(0, 24) : name;
+            StreamHost.Remember(request.ClientNetworkId, identity);
         }
 
         void OnClientDisconnect(ulong clientId)
@@ -207,6 +241,7 @@ namespace RocketWars.Net
             if (Manager.IsServer)
             {
                 Names.Remove(clientId);
+                StreamHost.Forget(clientId);
                 return;
             }
 
@@ -230,6 +265,7 @@ namespace RocketWars.Net
                 return;
             _leaving = true;
             LastMessage = message;
+            Debug.Log($"[RocketWars] back to menu: {message ?? "-"}");
 
             try
             {
@@ -243,6 +279,8 @@ namespace RocketWars.Net
             if (Manager != null && Manager.IsListening)
                 Manager.Shutdown();
             Names.Clear();
+            Online.StreamBot.OnLeaveRoom(); // стример ушёл — стрим закончен, бот разошлёт итоги
+            StreamHost.Reset();
 
             // NetworkManager живёт в DontDestroyOnLoad — уничтожаем, чтобы сцена создала свежий
             var scene = SceneManager.GetActiveScene().name;
@@ -278,6 +316,15 @@ namespace RocketWars.Net
                     case "-bots" when Debug.isDebugBuild:
                         MatchNet.SpawnTestBots = true;
                         break;
+                    case "-streamtest" when Debug.isDebugBuild:
+                        var streamTest = gameObject.AddComponent<StreamTest>();
+                        int ex = Array.IndexOf(args, "-expect");
+                        if (ex >= 0 && ex + 1 < args.Length && int.TryParse(args[ex + 1], out var expectViewers))
+                            streamTest.expectClients = expectViewers;
+                        int shot = Array.IndexOf(args, "-shot");
+                        if (shot >= 0 && shot + 1 < args.Length)
+                            streamTest.shotDir = args[shot + 1];
+                        break;
                     case "-autotest" when Debug.isDebugBuild:
                         var test = gameObject.AddComponent<AutoTest>();
                         int e = Array.IndexOf(args, "-expect");
@@ -295,6 +342,17 @@ namespace RocketWars.Net
                     JoinLan(args[i + 1], port);
                 else if (args[i] == "-joincode" && i + 1 < args.Length)
                     JoinInternetSession(args[i + 1], true, err => Debug.Log($"[RocketWars] join by code: {err ?? "OK"}"));
+                else if (args[i] == "-streamhost" && Debug.isDebugBuild)
+                {
+                    int s = Array.IndexOf(args, "-slots");
+                    int slots = s >= 0 && s + 1 < args.Length && int.TryParse(args[s + 1], out var n) ? n : 0;
+                    CreateInternetSession(err =>
+                    {
+                        if (slots > 0)
+                            StreamHost.SetSlots(slots);
+                        Debug.Log($"[RocketWars] stream room: {err ?? "OK"}, code {SessionService.Current?.Code}, slots {StreamHost.Slots}");
+                    }, true);
+                }
             }
         }
     }

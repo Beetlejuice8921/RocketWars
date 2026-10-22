@@ -94,6 +94,13 @@ namespace RocketWars.Core
 
         public virtual void Invite(string roomCode) { }
 
+        /// <summary>
+        /// Ссылка, открывающая игру (Telegram Mini App) сразу в комнате с этим кодом, — для QR-кода стрим-комнаты.
+        /// Одна на все площадки: зрители стрима заходят из Telegram.
+        /// </summary>
+        public static string InviteUrl(string roomCode) =>
+            string.IsNullOrEmpty(roomCode) ? null : $"{WebPlatform.TelegramAppUrl}?startapp={WebPlatform.InviteStartPrefix}{roomCode}";
+
         /// <summary>Переключатель «Оконный режим» в опциях: ПК-сборка и Telegram на компьютере (Telegram Desktop, web.telegram.org).</summary>
         public virtual bool CanToggleWindowed => false;
 

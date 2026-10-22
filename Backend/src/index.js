@@ -2,8 +2,11 @@
 // Хост в комнате — обычный игрок, поэтому одному его слову не верим: итог матча засчитывается, только когда
 // отчёты нескольких настоящих игроков (аккаунты площадки) совпали. Подробности — Backend/README.md.
 
-const WINS_NEEDED = 4;              // MatchManager.WinsNeeded
-const MIN_MATCH_SEC = 60;           // матч до 4 побед короче не бывает
+import { CORS, HttpError, json, now, body, requireToken, readToken, signToken, cleanName, randomId, hmac, sha256, hex, timingSafeEqual } from './common.js';
+import * as bot from './bot.js';
+
+const WINS_NEEDED = 4;              // MatchManager.WinsNeeded; стрим-комната — до 1–4 побед (поле wins отчёта)
+const MIN_MATCH_SEC = 60;           // матч до 4 побед короче не бывает (до меньшего — пропорционально)
 const MIN_ROUND_SEC = 12;           // отсчёт 3 с + итог раунда 4 с + сам раунд
 const MATCH_TTL_SEC = 3 * 3600;     // отчёты по старому матчу не принимаем
 const TOKEN_TTL_SEC = 7 * 86400;
@@ -14,15 +17,9 @@ const PRACTICE_POINTS = 3;          // матч с ботами без втор�
 const PRACTICE_WEEK_CAP = 30;
 const TOP_LIMIT = 100;
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-  'Access-Control-Max-Age': '86400',
-};
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS')
       return new Response(null, { status: 204, headers: CORS });
     try {
@@ -35,6 +32,12 @@ export default {
         case 'POST /v1/match/report': return await matchReport(request, env);
         case 'GET /v1/match/result': return await matchResult(request, env, url);
         case 'GET /v1/leaderboard': return await leaderboard(request, env, url);
+        case 'POST /v1/stream/open': return await bot.streamOpen(request, env);
+        case 'POST /v1/stream/announce': return await bot.streamAnnounce(request, env, ctx);
+        case 'POST /v1/stream/close': return await bot.streamClose(request, env, ctx);
+        case 'POST /v1/stream/played': return await bot.streamPlayed(request, env);
+        case 'POST /tg/webhook': return await bot.webhook(request, env);
+        case 'POST /tg/setup': return await bot.setup(request, env, url);
         default: return json({ error: 'not_found' }, 404);
       }
     } catch (e) {
@@ -44,26 +47,12 @@ export default {
       return json({ error: 'internal' }, 500);
     }
   },
+
+  // cron (wrangler.toml, раз в минуту): рассылка бота пачками, итоги закончившихся стримов
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(bot.scheduled(env));
+  },
 };
-
-class HttpError extends Error {
-  constructor(status, code) {
-    super(code);
-    this.status = status;
-    this.code = code;
-  }
-}
-
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
-}
-
-const now = () => Math.floor(Date.now() / 1000);
-
-async function body(request) {
-  try { return await request.json(); }
-  catch { throw new HttpError(400, 'bad_json'); }
-}
 
 /** Гости в общем рейтинге — только при локальной проверке (GUESTS_RANKED=1 в .dev.vars). */
 const guestsRanked = env => env.GUESTS_RANKED === '1';
@@ -78,6 +67,9 @@ async function auth(request, env) {
     extId = String(user.id);
     name = user.first_name || user.username || '';
     verified = 1;
+    // разрешил боту писать (запрос в Mini App) — будет получать анонсы стримов и итоги
+    if (user.allows_write_to_pm)
+      await bot.subscribe(env, user, 'webapp');
   } else if (provider === 'guest') {
     // ключ устройства: случайные 32+ hex-символа, на сервере храним только хэш
     if (typeof data !== 'string' || !/^[0-9a-f]{32,64}$/.test(data))
@@ -96,7 +88,10 @@ async function auth(request, env) {
   const player = await env.DB.prepare('SELECT id, name, verified FROM players WHERE provider = ?1 AND ext_id = ?2')
     .bind(provider, extId).first();
   const token = await signToken({ p: player.id, v: player.verified, e: t + TOKEN_TTL_SEC }, env.TOKEN_SECRET);
-  return json({ token, playerId: player.id, verified: player.verified === 1, ranked: isRanked(player.verified, env) });
+  return json({
+    token, playerId: player.id, verified: player.verified === 1, ranked: isRanked(player.verified, env),
+    skins: await bot.skinsOf(env, player.id), // скины-награды (стримы)
+  });
 }
 
 const isRanked = (verified, env) => verified === 1 || guestsRanked(env);
@@ -158,7 +153,7 @@ async function matchReport(request, env) {
   if (age > MATCH_TTL_SEC)
     throw new HttpError(410, 'match_expired');
   const rounds = report.score0 + report.score1;
-  if (age < Math.max(MIN_MATCH_SEC, rounds * MIN_ROUND_SEC) && env.SKIP_DURATION_CHECK !== '1')
+  if (age < Math.max(MIN_MATCH_SEC * report.wins / WINS_NEEDED, rounds * MIN_ROUND_SEC) && env.SKIP_DURATION_CHECK !== '1')
     throw new HttpError(400, 'match_too_short');
 
   const mine = report.rows.find(r => r.id === report.me);
@@ -215,11 +210,16 @@ async function tryFinalize(env, match, report, hash) {
   for (const r of reporters.results) {
     const row = report.rows.find(x => x.id === r.row_id);
     if (row)
-      await credit(env, match.id, r.player_id, r.verified === 1, row, report.winner, humans < 2);
+      await credit(env, match.id, r.player_id, r.verified === 1, row, report.winner, humans < 2, report.wins);
   }
 }
 
-function matchPoints(row, winner) {
+/** Очки за матч до 4 побед; короткий матч стрим-комнаты (до 1–3) — пропорционально меньше. */
+function matchPoints(row, winner, wins = WINS_NEEDED) {
+  return Math.round(fullMatchPoints(row, winner) * wins / WINS_NEEDED);
+}
+
+function fullMatchPoints(row, winner) {
   if (row.left)
     return 0;
   let p = 10;
@@ -232,7 +232,7 @@ function matchPoints(row, winner) {
   return Math.max(0, p);
 }
 
-async function credit(env, matchId, playerId, ranked, row, winner, practice) {
+async function credit(env, matchId, playerId, ranked, row, winner, practice, wins) {
   const season = weekId(new Date());
   const t = now();
   const week = await env.DB.prepare('SELECT points, practice_points FROM scores WHERE player_id = ?1 AND season = ?2')
@@ -241,7 +241,7 @@ async function credit(env, matchId, playerId, ranked, row, winner, practice) {
   if (practice)
     points = row.left ? 0 : Math.max(0, Math.min(PRACTICE_POINTS, PRACTICE_WEEK_CAP - (week ? week.practice_points : 0)));
   else
-    points = matchPoints(row, winner);
+    points = matchPoints(row, winner, wins);
 
   const rankBefore = ranked && week && week.points > 0 ? await rankOf(env, season, week.points) : null;
 
@@ -328,17 +328,21 @@ function normalizeReport(b) {
   }));
   if (new Set(rows.map(r => r.id)).size !== rows.length)
     throw new HttpError(400, 'bad_rows');
-  const score0 = int(b.score0, WINS_NEEDED), score1 = int(b.score1, WINS_NEEDED), winner = int(b.winner, 1);
-  if ((winner === 0 ? score0 : score1) !== WINS_NEEDED || (winner === 0 ? score1 : score0) >= WINS_NEEDED)
+  // до скольких побед шёл матч: старые клиенты поле не шлют — 4
+  const wins = b.wins === undefined ? WINS_NEEDED : int(b.wins, WINS_NEEDED);
+  if (wins < 1)
     throw new HttpError(400, 'bad_score');
-  return { matchId: b.matchId, me: int(b.me, Number.MAX_SAFE_INTEGER), score0, score1, winner, rows };
+  const score0 = int(b.score0, wins), score1 = int(b.score1, wins), winner = int(b.winner, 1);
+  if ((winner === 0 ? score0 : score1) !== wins || (winner === 0 ? score1 : score0) >= wins)
+    throw new HttpError(400, 'bad_score');
+  return { matchId: b.matchId, me: int(b.me, Number.MAX_SAFE_INTEGER), wins, score0, score1, winner, rows };
 }
 
 /** Одинаковая таблица у всех игроков → одинаковая строка (порядок строк и полей фиксирован). */
 function canonical(r) {
   const rows = [...r.rows].sort((a, b) => a.id - b.id)
     .map(x => [x.id, x.team, x.name, x.downed, x.deaths, x.revives, x.silos, x.falls, x.tk, x.ach, x.left ? 1 : 0, x.bot ? 1 : 0]);
-  return JSON.stringify([r.matchId, r.score0, r.score1, r.winner, rows]);
+  return JSON.stringify([r.matchId, r.wins, r.score0, r.score1, r.winner, rows]);
 }
 
 // ---------- рейтинг ----------
@@ -401,82 +405,8 @@ function secondsToNextWeek(date) {
   return Math.max(0, Math.floor((next - date.getTime()) / 1000));
 }
 
-// ---------- токен ----------
-
-async function requireToken(request, env) {
-  const t = await readToken(request, env);
-  if (!t)
-    throw new HttpError(401, 'no_token');
-  return t;
-}
-
-async function readToken(request, env) {
-  const h = request.headers.get('Authorization') || '';
-  if (!h.startsWith('Bearer '))
-    return null;
-  const [payload, sig] = h.slice(7).split('.');
-  if (!payload || !sig)
-    return null;
-  const expected = b64url(await hmac(new TextEncoder().encode(env.TOKEN_SECRET), payload));
-  if (!timingSafeEqual(expected, sig))
-    return null;
-  let data;
-  try { data = JSON.parse(new TextDecoder().decode(fromB64url(payload))); } catch { return null; }
-  return data && data.e > now() ? data : null;
-}
-
-async function signToken(data, secret) {
-  if (!secret)
-    throw new HttpError(500, 'no_token_secret');
-  const payload = b64url(new TextEncoder().encode(JSON.stringify(data)));
-  return `${payload}.${b64url(await hmac(new TextEncoder().encode(secret), payload))}`;
-}
-
-// ---------- мелочи ----------
-
-/** Имя для таблицы: без управляющих символов, до 24 знаков (как в игре). */
-function cleanName(s) {
-  return String(s || '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 24);
-}
-
 function popcount(n) {
   let c = 0;
   for (n >>>= 0; n; n &= n - 1) c++;
   return c;
-}
-
-function randomId() {
-  return hex(crypto.getRandomValues(new Uint8Array(10)));
-}
-
-async function hmac(keyBytes, message) {
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  return new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message)));
-}
-
-async function sha256(text) {
-  return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))));
-}
-
-function hex(bytes) {
-  return [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function b64url(bytes) {
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromB64url(s) {
-  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
-  return Uint8Array.from(bin, c => c.charCodeAt(0));
-}
-
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length)
-    return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }

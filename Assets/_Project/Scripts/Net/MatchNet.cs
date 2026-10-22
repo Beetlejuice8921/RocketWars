@@ -29,9 +29,10 @@ namespace RocketWars.Net
     /// • взрывы рассылаются всем и применяются к кубикам детерминированно, подключившимся позже — история раунда;
     /// • состояние шахт и пультов — NetworkList&lt;SiloSync&gt;, ящиков с припасами — NetworkList&lt;CrateSync&gt;;
     /// • ящики, сброшенные с неба посреди раунда, — NetworkList&lt;CrateDrop&gt; (у всех создаются в том же порядке);
-    /// • спавн игроков с автобалансом команд, тестовые боты.
+    /// • спавн игроков с автобалансом команд, тестовые боты;
+    /// • стрим-комната: очередь зрителей и смена игроков после матча (MatchNet.Stream.cs).
     /// </summary>
-    public class MatchNet : NetworkBehaviour
+    public partial class MatchNet : NetworkBehaviour
     {
         public static MatchNet Instance { get; private set; }
 
@@ -79,6 +80,7 @@ namespace RocketWars.Net
             _crateSync = new NetworkList<CrateSync>();
             _flagSync = new NetworkList<FlagSync>();
             _crateDrops = new NetworkList<CrateDrop>();
+            _queue = new NetworkList<QueueEntry>();
 
             _worldRoot = new GameObject("World").transform;
             for (int team = 0; team < 2; team++)
@@ -248,6 +250,7 @@ namespace RocketWars.Net
 
             if (IsServer)
             {
+                UpdateStream();
                 UpdateBotBalance();
                 for (int i = 0; i < _silos.Count && i < _siloSync.Count; i++)
                 {
@@ -403,8 +406,16 @@ namespace RocketWars.Net
 
         void OnConnectionEvent(NetworkManager nm, ConnectionEventData data)
         {
+            if (data.EventType == ConnectionEvent.ClientDisconnected)
+                OnStreamClientLeft(data.ClientId);
             if (data.EventType != ConnectionEvent.ClientConnected)
                 return;
+            // стрим-комната: забаненный или вход закрыт — отключаем с причиной (MatchNet.Stream)
+            if (StreamHost.TakeRejection(data.ClientId) is string rejection)
+            {
+                NetworkManager.DisconnectClient(data.ClientId, rejection);
+                return;
+            }
             SpawnPlayerFor(data.ClientId);
             if (data.ClientId != NetworkManager.ServerClientId && _history.Count > 0)
                 HistoryRpc(_history.ToArray(), RoundId, RpcTarget.Single(data.ClientId, RpcTargetUse.Temp));
@@ -412,11 +423,23 @@ namespace RocketWars.Net
 
         void SpawnPlayerFor(ulong clientId)
         {
-            if (!NetworkManager.ConnectedClients.TryGetValue(clientId, out var client) || client.PlayerObject != null)
+            // стрим-комната: зрители встают в очередь, в игру их пускает UpdateStream, когда есть место
+            if (StreamHost.Enabled && clientId != NetworkManager.ServerClientId)
+            {
+                Enqueue(clientId);
                 return;
+            }
+            SpawnPlayerNow(clientId);
+        }
+
+        bool SpawnPlayerNow(ulong clientId)
+        {
+            if (!NetworkManager.ConnectedClients.TryGetValue(clientId, out var client) || HasPlayer(client))
+                return false;
             int team = PickTeam();
             var player = CreatePlayer(team, NetworkBootstrap.GetPlayerName(clientId), false);
             player.NetworkObject.SpawnAsPlayerObject(clientId, true);
+            return true;
         }
 
         /// <summary>Автобаланс: в команду, где меньше живых игроков (боты-балансиры потом уйдут сами).</summary>
@@ -593,7 +616,7 @@ namespace RocketWars.Net
             var go = Instantiate(prefab, _islands[team].GetRandomSpawnPoint(1f), FacingEnemy(team));
             var health = go.GetComponent<PlayerHealth>();
             // боты — в случайном скине; игрок свой скин ставит сам (PlayerHealth.Skin пишет владелец)
-            health.ServerInit(team, displayName, bot ? Random.Range(0, Skins.Count) : -1);
+            health.ServerInit(team, displayName, bot ? Skins.RandomForBot() : -1);
             go.GetComponent<NetworkPlayer>().ServerInit(bot);
             return health;
         }
