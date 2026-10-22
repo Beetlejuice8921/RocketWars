@@ -119,7 +119,7 @@ namespace RocketWars.Player
 
             if (IsLocal)
                 UpdateCursor();
-            if (IsLocal && !LookLocked && LookActive)
+            if (IsLocal && !LookLocked && LookActive && !GameInput.Blocked)
                 UpdateLook(downed);
             if (!downed && _lookYaw != 0f)
                 MergeLookYaw();

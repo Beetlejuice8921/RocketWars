@@ -47,7 +47,7 @@ namespace RocketWars.Player
             var me = NetworkPlayer.LocalPlayer;
             bool enemy = me != null && me != _net && me.Health != null && me.Health.Team != _health.Team;
             _glintAmount = Mathf.MoveTowards(_glintAmount, aiming && enemy ? 1f : 0f, dt * 4f);
-            var cam = Camera.main;
+            var cam = Dev.CaptureMode.ViewCamera;
             bool show = _glintAmount > 0f && cam != null;
             if (_glint.gameObject.activeSelf != show)
                 _glint.gameObject.SetActive(show);

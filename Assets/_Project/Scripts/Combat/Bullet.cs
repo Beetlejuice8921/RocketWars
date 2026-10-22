@@ -190,7 +190,7 @@ namespace RocketWars.Combat
             float converge = Mathf.Clamp01(1f - _traveled / ConvergeDistance);
             _visual.position = transform.position + _visualOffset * converge;
 
-            var cam = Camera.main;
+            var cam = Dev.CaptureMode.ViewCamera;
             float dist = cam != null ? Vector3.Distance(cam.transform.position, _visual.position) : 0f;
             float width = Mathf.Max(MinCoreWidth, dist * WidthPerMeter);
             // своя пуля «вырастает» из дула (ровно на пройденный путь), чужая — из точки чуть впереди глаз стрелка

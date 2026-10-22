@@ -21,6 +21,8 @@ namespace RocketWars.UI
         public static UiRoot Instance { get; private set; }
         /// <summary>Курсор нужен интерфейсу (FpsController его не захватывает).</summary>
         public static bool CursorFree { get; private set; } = true;
+        /// <summary>HUD спрятан (режим съёмки — чистый кадр); пауза и итоги показываются как обычно.</summary>
+        public static bool HudHidden { get; set; }
 
         public StyleSheet styleSheet;
 
@@ -193,9 +195,9 @@ namespace RocketWars.UI
             bool resultsModal = matchEnd && !_resultsDismissed;
 
             // на экране итогов HUD (здоровье, счёт, подсказки) не нужен — не просвечивает сквозь пьедестал
-            _hud.SetVisible(inGame && !resultsModal);
+            _hud.SetVisible(inGame && !resultsModal && !HudHidden);
             _pause.SetVisible(inGame && _pauseOpen);
-            _touch.SetVisible(inGame && !resultsModal && !_pauseOpen && !_options.IsOpen && !_streamPanel.IsOpen);
+            _touch.SetVisible(inGame && !resultsModal && !_pauseOpen && !_options.IsOpen && !_streamPanel.IsOpen && !HudHidden);
             _results.SetMode(resultsModal ? ResultsView.Mode.Final : tabHeld ? ResultsView.Mode.Peek : ResultsView.Mode.Hidden,
                 () => _resultsDismissed = true);
 

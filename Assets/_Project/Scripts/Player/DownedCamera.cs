@@ -31,6 +31,9 @@ namespace RocketWars.Player
         float _blend;
         bool _bodyShown, _trick;
 
+        /// <summary>Вид от третьего лица: своё тело сейчас рисуется целиком, а не одной тенью.</summary>
+        public bool BodyShown => _bodyShown;
+
         void Awake()
         {
             _fps = GetComponent<FpsController>();

@@ -100,7 +100,7 @@ namespace RocketWars.Fx
 
         void LateUpdate()
         {
-            var cam = Camera.main;
+            var cam = Dev.CaptureMode.ViewCamera;
             if (cam == null || _clouds == null)
                 return;
             Vector3 camPos = cam.transform.position;

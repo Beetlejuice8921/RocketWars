@@ -81,11 +81,14 @@ namespace RocketWars.Core
             }
         }
 
-        public static bool IsPressed(GameAction action) =>
-            Control(Binds[(int)action]) is ButtonControl c && c.isPressed || TouchInput.IsHeld(action) || SimulatedHeld(action);
+        /// <summary>Игровой ввод отключён (режим съёмки: клавиши и мышь управляют камерой, игрок стоит).</summary>
+        public static bool Blocked { get; set; }
 
-        public static bool WasPressed(GameAction action) =>
-            Control(Binds[(int)action]) is ButtonControl c && c.wasPressedThisFrame || TouchInput.WasDown(action) || SimulatedDown(action);
+        public static bool IsPressed(GameAction action) => !Blocked &&
+            (Control(Binds[(int)action]) is ButtonControl c && c.isPressed || TouchInput.IsHeld(action) || SimulatedHeld(action));
+
+        public static bool WasPressed(GameAction action) => !Blocked &&
+            (Control(Binds[(int)action]) is ButtonControl c && c.wasPressedThisFrame || TouchInput.WasDown(action) || SimulatedDown(action));
 
         /// <summary>Движение: x — вправо, y — вперёд, длина до 1. Клавиши дают 0/1, экранный джойстик — плавно.</summary>
         public static Vector2 MoveAxis
@@ -94,7 +97,7 @@ namespace RocketWars.Core
             {
                 float h = (IsPressed(GameAction.Right) ? 1 : 0) - (IsPressed(GameAction.Left) ? 1 : 0);
                 float v = (IsPressed(GameAction.Forward) ? 1 : 0) - (IsPressed(GameAction.Back) ? 1 : 0);
-                return Vector2.ClampMagnitude(new Vector2(h, v) + TouchInput.Move, 1f);
+                return Blocked ? Vector2.zero : Vector2.ClampMagnitude(new Vector2(h, v) + TouchInput.Move, 1f);
             }
         }
 
