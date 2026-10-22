@@ -16,6 +16,10 @@ namespace RocketWars.UI
         readonly Label _room;
         readonly Button _invite;
         readonly Button _streamPanel;
+        readonly VisualElement _teamSizeRow;
+        readonly Label _teamSize;
+        readonly Button _teamSizeLess, _teamSizeMore;
+        readonly Label _teamSizeNote;
 
         public PauseView(VisualElement root, Action resume)
         {
@@ -45,6 +49,18 @@ namespace RocketWars.UI
             _switchTeam.style.paddingTop = _switchTeam.style.paddingBottom = 8;
             _switchBlocker.style.whiteSpace = WhiteSpace.Normal;
 
+            // хост: размер команд — недостающих игроков заменяют боты (MatchNet.TeamSize)
+            _teamSizeRow = Ui.El(panel, "row", "row-center");
+            Ui.Text(_teamSizeRow, Loc.T("Размер команд"), "label-dim");
+            _teamSizeLess = Ui.Btn(_teamSizeRow, "-", () => MatchNet.TeamSize--, "btn-small");
+            _teamSize = Ui.Text(_teamSizeRow, "", "options-value");
+            _teamSize.style.minWidth = 64;
+            _teamSize.style.unityTextAlign = UnityEngine.TextAnchor.MiddleCenter;
+            _teamSizeMore = Ui.Btn(_teamSizeRow, "+", () => MatchNet.TeamSize++, "btn-small");
+            _teamSizeNote = Ui.Text(panel, Loc.T("Недостающих игроков заменят боты"), "label-dim");
+            _teamSizeNote.style.whiteSpace = WhiteSpace.Normal;
+            _teamSizeNote.style.unityTextAlign = UnityEngine.TextAnchor.MiddleCenter;
+
             Ui.Btn(panel, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions());
 
             Ui.Btn(panel, Loc.T("Выйти из комнаты"), () => NetworkBootstrap.Instance?.ReturnToMenu(), "btn-danger");
@@ -72,6 +88,17 @@ namespace RocketWars.UI
             Ui.Show(_invite, session != null && GamePlatform.Current.CanInvite);
             var net = MatchNet.Instance;
             Ui.Show(_streamPanel, net != null && net.IsSpawned && net.IsServer && net.IsStream);
+
+            bool server = net != null && net.IsSpawned && net.IsServer;
+            Ui.Show(_teamSizeRow, server);
+            Ui.Show(_teamSizeNote, server);
+            if (server)
+            {
+                int size = MatchNet.TeamSize;
+                _teamSize.text = $"{size}×{size}";
+                _teamSizeLess.SetEnabled(size > MatchNet.TeamSizeMin);
+                _teamSizeMore.SetEnabled(size < MatchNet.TeamSizeMax);
+            }
         }
 
         /// <summary>

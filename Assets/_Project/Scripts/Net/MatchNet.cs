@@ -65,6 +65,30 @@ namespace RocketWars.Net
         /// <summary>Минимальный размер команды: недостающих добивают боты (по умолчанию матч 2×2).</summary>
         public const int MinTeamSize = 2;
 
+        /// <summary>Пределы размера команды, который выбирает хост (8×8 — все 16 мест комнаты).</summary>
+        public const int TeamSizeMin = 1, TeamSizeMax = NetworkBootstrap.MaxPlayers / 2;
+
+        const string TeamSizeKey = "teamSize";
+
+        /// <summary>
+        /// Хост: размер команды, до которого боты добивают каждую сторону (сохраняется между играми;
+        /// без кэша — PlayerPrefs могут прийти из облака площадки). Людей больше — команда растёт по людям.
+        /// </summary>
+        public static int TeamSize
+        {
+            get => Mathf.Clamp(PlayerPrefs.GetInt(TeamSizeKey, MinTeamSize), TeamSizeMin, TeamSizeMax);
+            set
+            {
+                value = Mathf.Clamp(value, TeamSizeMin, TeamSizeMax);
+                if (value == TeamSize)
+                    return;
+                PlayerPrefs.SetInt(TeamSizeKey, value);
+                PlayerPrefs.Save();
+                if (Instance != null)
+                    Instance._botBalanceTimer = 0f; // боты приходят и уходят сразу
+            }
+        }
+
         readonly List<PlayerHealth> _balanceBots = new List<PlayerHealth>();
         readonly List<NetworkPlayer> _switchQueue = new List<NetworkPlayer>(); // запросы смены команды во время матча
         float _botBalanceTimer = 1f; // первая проверка — сразу после старта хоста
@@ -565,7 +589,7 @@ namespace RocketWars.Net
 
         /// <summary>
         /// Сервер, не чаще раза в 15 с: каждая команда добивается ботами до размера
-        /// max(<see cref="MinTeamSize"/>, людей в большей команде) — один человек играет 2×2
+        /// max(<see cref="TeamSize"/>, людей в большей команде) — один человек по умолчанию играет 2×2
         /// (он + бот против двух ботов). Как только людей хватает, лишние боты уходят.
         /// В режиме тестовых ботов (разработка) балансир выключен.
         /// </summary>
@@ -578,7 +602,7 @@ namespace RocketWars.Net
 
             _balanceBots.RemoveAll(b => b == null || !b.IsSpawned);
             CountHumans(out int h0, out int h1);
-            int size = h0 == 0 && h1 == 0 ? 0 : Mathf.Max(MinTeamSize, h0, h1);
+            int size = h0 == 0 && h1 == 0 ? 0 : Mathf.Max(TeamSize, h0, h1);
             int need0 = size - h0, need1 = size - h1;
 
             // лишние — уходят (сначала лежащие: их уход не решает исход раунда)
