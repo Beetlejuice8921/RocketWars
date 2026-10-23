@@ -9,7 +9,7 @@ namespace RocketWars.Player
     /// Ящики с припасами у локального игрока: удерживать E рядом с закрытым ящиком 1,5 с — открыть
     /// (раненый сразу применяет аптечку); предмет из открытого ящика берётся нажатием E;
     /// у ящика с аптечками нажать E — вылечиться на 60 HP (аптечку нельзя унести с собой).
-    /// Ракета и подъём союзника важнее ящика. Сами решения принимает сервер.
+    /// Урон открытие не сбивает. Ракета и подъём союзника важнее ящика. Сами решения принимает сервер.
     /// </summary>
     [RequireComponent(typeof(PlayerHealth), typeof(NetworkPlayer))]
     public class CrateInteraction : MonoBehaviour
@@ -36,25 +36,12 @@ namespace RocketWars.Player
             _pryAudio.volume = 0.8f;
         }
 
-        void OnEnable()
-        {
-            _health.Hurt += OnHurt;
-            _net.LootReceived += OnLoot;
-        }
+        void OnEnable() => _net.LootReceived += OnLoot;
 
         void OnDisable()
         {
-            _health.Hurt -= OnHurt;
             _net.LootReceived -= OnLoot;
             SetTarget(null);
-        }
-
-        /// <summary>Урон сбивает открытие — как и подъём союзника.</summary>
-        void OnHurt(float amount)
-        {
-            if (IsOpening)
-                _needRelease = true;
-            StopPry();
         }
 
         /// <summary>Взятый предмет: броня, базука и снайперка — свои звуки, остальное — щелчок «взял»; аптечки остаются в ящике.</summary>

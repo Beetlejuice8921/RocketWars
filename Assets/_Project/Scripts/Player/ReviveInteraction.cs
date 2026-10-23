@@ -4,8 +4,8 @@ using UnityEngine;
 namespace RocketWars.Player
 {
     /// <summary>
-    /// Подъём лежащего союзника: удерживать E рядом 3 с. Прерывается отпусканием, уходом из радиуса
-    /// или уроном по поднимающему (после урона нужно отпустить и нажать E заново).
+    /// Подъём лежащего союзника: удерживать E рядом 3 с. Прерывается отпусканием или уходом из радиуса;
+    /// урон по поднимающему прогресс не сбрасывает.
     /// Прогресс считает владелец, сам подъём подтверждает сервер.
     /// </summary>
     [RequireComponent(typeof(PlayerHealth), typeof(FpsController), typeof(NetworkPlayer))]
@@ -34,16 +34,6 @@ namespace RocketWars.Player
             _health = GetComponent<PlayerHealth>();
             _controller = GetComponent<FpsController>();
             _net = GetComponent<NetworkPlayer>();
-        }
-
-        void OnEnable() => _health.Hurt += OnHurt;
-        void OnDisable() => _health.Hurt -= OnHurt;
-
-        void OnHurt(float amount)
-        {
-            if (IsReviving)
-                _needRelease = true;
-            Progress = 0f;
         }
 
         void Update()

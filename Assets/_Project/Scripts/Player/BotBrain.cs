@@ -153,18 +153,12 @@ namespace RocketWars.Player
             Debug.Log($"[RocketWars] bot {_health.DisplayName} is {Role}");
         }
 
-        void OnEnable() => _health.Hurt += OnHurt;
-
         void OnDisable()
         {
-            _health.Hurt -= OnHurt;
             ReleaseConsole();
             if (_rideSilo >= 0)
                 ReleaseRide();
         }
-
-        /// <summary>Урон сбивает подъём и открытие ящика — как у игрока.</summary>
-        void OnHurt(float amount) => _holdProgress = 0f;
 
         VoxelIsland MyIsland => VoxelIsland.ForTeam(_health.Team);
         VoxelIsland EnemyIsland => VoxelIsland.ForTeam(1 - _health.Team);
