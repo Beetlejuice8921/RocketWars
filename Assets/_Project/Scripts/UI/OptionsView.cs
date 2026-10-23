@@ -50,7 +50,8 @@ namespace RocketWars.UI
                 scroll.Add(_windowed);
             }
 
-            Ui.Text(scroll, Loc.T("ЧУВСТВИТЕЛЬНОСТЬ МЫШИ"), "section");
+            // на телефоне — своя чувствительность пальца (GameInput), автоогонь, а клавиш нет
+            Ui.Text(scroll, Loc.T(TouchInput.Enabled ? "ЧУВСТВИТЕЛЬНОСТЬ ОБЗОРА" : "ЧУВСТВИТЕЛЬНОСТЬ МЫШИ"), "section");
             var sensRow = Ui.El(scroll, "row");
             var sens = new Slider(GameInput.MinSensitivity, GameInput.MaxSensitivity) { value = GameInput.Sensitivity };
             sens.AddToClassList("grow");
@@ -64,7 +65,14 @@ namespace RocketWars.UI
             _sensValue.text = FormatSensitivity();
 
             Ui.Text(scroll, Loc.T("УПРАВЛЕНИЕ"), "section");
-            for (int i = 0; i < GameInput.ActionCount; i++)
+            if (TouchInput.Enabled)
+            {
+                var autoFire = new Toggle(" " + Loc.T("Автоогонь: стрелять, когда прицел на враге")) { value = TouchInput.AutoFire };
+                autoFire.AddToClassList("label-dim");
+                autoFire.RegisterValueChangedCallback(e => TouchInput.AutoFire = e.newValue);
+                scroll.Add(autoFire);
+            }
+            else for (int i = 0; i < GameInput.ActionCount; i++)
             {
                 int index = i;
                 var row = Ui.El(scroll, "row", "bind-row");
@@ -79,7 +87,7 @@ namespace RocketWars.UI
                 RefreshBinds();
             }, "btn-small");
 
-            Ui.Btn(panel, Loc.T("Закрыть (Esc)"), Close, "btn-primary");
+            Ui.Btn(panel, Loc.T(TouchInput.Enabled ? "Закрыть" : "Закрыть (Esc)"), Close, "btn-primary");
 
             _langPicker = BuildLangPicker(root);
             RefreshBinds();
@@ -143,6 +151,8 @@ namespace RocketWars.UI
         {
             for (int i = 0; i < _bindButtons.Length; i++)
             {
+                if (_bindButtons[i] == null)
+                    continue; // телефон: клавиш нет
                 bool listening = i == _listening;
                 _bindButtons[i].text = listening ? Loc.T("Нажмите клавишу…") : GameInput.KeyName((GameAction)i);
                 _bindButtons[i].EnableInClassList("bind-listening", listening);

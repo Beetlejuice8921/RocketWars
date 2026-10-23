@@ -23,6 +23,9 @@ namespace RocketWars.Core
         /// <summary>Ссылка на Mini App (@BotFather → /newapp); приглашение добавляет к ней ?startapp=room_&lt;код&gt;.</summary>
         public const string TelegramAppUrl = "https://t.me/RocketWarsGameBot/play";
 
+        /// <summary>Чат с ботом (старый Telegram без requestWriteAccess: подписка — кнопкой «Старт» в чате).</summary>
+        public const string TelegramBotUrl = "https://t.me/RocketWarsGameBot?start=sub";
+
         /// <summary>Приставка параметра startapp у приглашения в комнату (остальные значения — на будущее, например рефералы).</summary>
         public const string InviteStartPrefix = "room_";
 
@@ -48,6 +51,7 @@ namespace RocketWars.Core
         bool _initialized, _readyPending;
         bool _canToggleWindowed, _windowed, _allowsCtrl;
         Action<bool> _adClosed;
+        Action<bool?> _writeAccess;
 
         public WebPlatform(string id)
         {
@@ -86,6 +90,25 @@ namespace RocketWars.Core
             if (!CanInvite || string.IsNullOrEmpty(roomCode))
                 return;
             RW_Share($"{InviteUrl(roomCode)}&mode=fullscreen", Loc.F("Заходи ко мне в Rocket Wars! Код комнаты: {0}", roomCode));
+        }
+
+        public override bool HasBot => _id == "telegram" && !string.IsNullOrEmpty(_authData);
+
+        public override void RequestBotMessages(Action<bool?> onDone)
+        {
+            if (_writeAccess != null)
+                return; // окно Telegram уже открыто
+            _writeAccess = onDone ?? (_ => { });
+            RW_RequestWriteAccess();
+        }
+
+        void OnWriteAccess(string answer)
+        {
+            var callback = _writeAccess;
+            _writeAccess = null;
+            if (answer == "-1")
+                RW_OpenLink(TelegramBotUrl);
+            callback?.Invoke(answer == "-1" ? (bool?)null : answer == "1");
         }
 
         public override bool AllowsCtrl => _allowsCtrl;
@@ -249,7 +272,7 @@ namespace RocketWars.Core
         {
             var list = new System.Collections.Generic.List<(string, char)>
             {
-                ("language", 'i'), ("volume", 'f'), ("mouseSensitivity", 'f'), ("playerName", 's'), (AdPolicy.MatchesKey, 'i'),
+                ("language", 'i'), ("volume", 'f'), (GameInput.MouseSensitivityKey, 'f'), (GameInput.TouchSensitivityKey, 'f'), (TouchInput.AutoFireKey, 'i'), ("playerName", 's'), (AdPolicy.MatchesKey, 'i'),
             };
             foreach (var action in Enum.GetNames(typeof(GameAction)))
                 list.Add(("bind." + action, 'i'));
@@ -353,10 +376,17 @@ namespace RocketWars.Core
 
             void OnWindowed(string windowed) => _platform._windowed = windowed == "1";
 
+            void OnWriteAccess(string answer) => _platform.OnWriteAccess(answer);
+
             // звук молчит, пока вкладка скрыта или идёт реклама. Игру не останавливаем — она сетевая
             void OnPause(string reason) => SetPaused(reason, true);
 
-            void OnResume(string reason) => SetPaused(reason, false);
+            void OnResume(string reason)
+            {
+                SetPaused(reason, false);
+                if (reason != "ad")
+                    RaiseResumed();
+            }
 
             void SetPaused(string reason, bool paused)
             {
@@ -379,6 +409,7 @@ namespace RocketWars.Core
         [DllImport("__Internal")] static extern void RW_OpenLink(string url);
         [DllImport("__Internal")] static extern void RW_Share(string url, string text);
         [DllImport("__Internal")] static extern void RW_SetFullscreen(int on);
+        [DllImport("__Internal")] static extern void RW_RequestWriteAccess();
 #else
         // редактор: SDK нет — готовы сразу (без события: конструктор ещё не вернул Current), реклама сразу закрывается
         void RW_Init(string platform, string config) => _initialized = true;
@@ -389,6 +420,7 @@ namespace RocketWars.Core
         static void RW_OpenLink(string url) => Application.OpenURL(url);
         static void RW_Share(string url, string text) => Application.OpenURL("https://t.me/share/url?url=" + Uri.EscapeDataString(url) + "&text=" + Uri.EscapeDataString(text));
         static void RW_SetFullscreen(int on) { }
+        void RW_RequestWriteAccess() => OnWriteAccess("1");
 #endif
     }
 }

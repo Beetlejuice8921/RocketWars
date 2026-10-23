@@ -221,8 +221,9 @@ namespace RocketWars.Player
             bool onConsole = interactor != null && interactor.Hovered != null;
             // с биноклем у глаз (и пока он поднимается/опускается) не стреляем; в оптику снайперки — можно
             bool binocularsInUse = _binoculars != null && !_binoculars.IsScope && (_binoculars.IsUp || _binoculars.Amount > 0f);
-            // пулемёт стреляет очередью, пока зажата кнопка стрельбы; пистолет — по одному нажатию
-            bool automatic = HoldingMachineGun || gold;
+            // пулемёт стреляет очередью, пока зажата кнопка стрельбы; пистолет — по одному нажатию,
+            // а на телефоне и пистолет стреляет, пока держишь палец (как в мобильных шутерах; темп — откат пистолета)
+            bool automatic = HoldingMachineGun || gold || TouchInput.Enabled && !HoldingSniper && !HoldingBazooka;
             bool trigger = automatic ? GameInput.IsPressed(GameAction.Fire) : GameInput.WasPressed(GameAction.Fire);
             if (canUse && !onConsole && !binocularsInUse && !MatchManager.FreezePlayers && _cooldown <= 0f && trigger)
                 Fire();

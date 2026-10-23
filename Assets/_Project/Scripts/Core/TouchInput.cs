@@ -15,6 +15,18 @@ namespace RocketWars.Core
         /// <summary>Включить на ПК (проверки в редакторе).</summary>
         public static bool ForceEnabled;
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+        /// <summary>Проверка в браузере на ПК: «?touch=1» в адресе — сенсорный режим, а мышь работает как палец.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void ReadUrl()
+        {
+            if (Application.isMobilePlatform || !Application.absoluteURL.Contains("touch=1"))
+                return;
+            ForceEnabled = true;
+            UnityEngine.InputSystem.EnhancedTouch.TouchSimulation.Enable();
+        }
+#endif
+
         /// <summary>Джойстик: x — вправо, y — вперёд, длина до 1.</summary>
         public static Vector2 Move;
 
@@ -23,6 +35,26 @@ namespace RocketWars.Core
 
         /// <summary>Кнопка «Счёт» зажата — таблица результатов, как Tab.</summary>
         public static bool ScoreHeld;
+
+        /// <summary>Рядом есть, что сделать кнопкой «Действие» (HudView: подъём, ракета, ящик, флаг) — кнопка видна.</summary>
+        public static bool UseContext;
+
+        public const string AutoFireKey = "autoFire";
+        static bool? _autoFire;
+
+        /// <summary>Автоогонь: оружие стреляет само, пока прицел на враге (как в Modern Strike Online).</summary>
+        public static bool AutoFire
+        {
+            get => _autoFire ??= PlayerPrefs.GetInt(AutoFireKey, 1) != 0;
+            set
+            {
+                _autoFire = value;
+                PlayerPrefs.SetInt(AutoFireKey, value ? 1 : 0);
+            }
+        }
+
+        /// <summary>Перечитать настройки (PlayerPrefs пришли из облака площадки).</summary>
+        public static void ReloadSaved() => _autoFire = null;
 
         static readonly bool[] Held = new bool[System.Enum.GetValues(typeof(GameAction)).Length];
         static readonly int[] DownFrame = new int[Held.Length];
@@ -61,6 +93,7 @@ namespace RocketWars.Core
             Move = Vector2.zero;
             LookDelta = Vector2.zero;
             ScoreHeld = false;
+            UseContext = false;
         }
     }
 }

@@ -296,6 +296,95 @@
     margin-top: 12px;
 }
 
+/* правый столбик под панелью: «Как играть?» и под ней — подписка на бота */
+.menu-right {
+    align-items: flex-end;
+}
+
+/* подписка на бота Telegram: пиксельная кнопка с колокольчиком, подписан — зелёная плашка с галочкой */
+.bot-btn {
+    flex-direction: row;
+    align-items: center;
+    width: 360px;
+    min-height: 64px;
+    margin: 12px 0 0 0;
+    padding: 8px 14px 8px 12px;
+    background-color: rgb(34, 139, 206);
+    border-width: 0 0 4px 0;
+    border-color: rgb(18, 84, 130);
+    border-radius: 0;
+    color: rgb(255, 255, 255);
+}
+
+.bot-btn:hover {
+    background-color: rgb(52, 160, 228);
+}
+
+.bot-btn:active {
+    border-bottom-width: 1px;
+    margin-top: 15px;
+}
+
+.bot-btn:disabled {
+    opacity: 0.6;
+}
+
+.bot-btn--on {
+    background-color: rgb(30, 70, 44);
+    border-color: rgb(16, 40, 24);
+}
+
+.bot-btn--on:hover {
+    background-color: rgb(38, 88, 56);
+}
+
+.bot-btn--confirm {
+    background-color: rgb(150, 44, 40);
+    border-color: rgb(84, 22, 20);
+}
+
+.bot-btn--confirm:hover {
+    background-color: rgb(176, 56, 50);
+}
+
+.bot-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    margin-right: 12px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.bot-text {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.bot-title {
+    font-size: 13px;
+    -unity-font-style: bold;
+    white-space: normal;
+    -unity-text-align: middle-left;
+    padding: 0;
+    margin: 0;
+}
+
+.bot-note {
+    font-size: 8px;
+    margin: 6px 0 0 0;
+    padding: 0;
+    white-space: normal;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.bot-btn--on .bot-note {
+    color: rgb(140, 230, 150);
+}
+
+.bot-note--error {
+    color: rgb(255, 196, 120);
+}
+
 /* ---------- как играть ---------- */
 
 .howto-panel {
@@ -1333,13 +1422,33 @@
     text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7);
 }
 
-.touch-fire { right: 56px; bottom: 70px; width: 190px; height: 190px; }
+/* раскладка как в Modern Strike Online / World War Heroes: «Огонь» под большим пальцем,
+   прыжок над ним, прицел слева, присед снизу; второй «Огонь» над джойстиком; «Действие» — только по делу */
+.touch-fire { right: 50px; bottom: 90px; width: 200px; height: 200px; }
 .touch-fire .touch-label { font-size: 20px; }
-.touch-jump { right: 270px; bottom: 40px; width: 130px; height: 120px; }
-.touch-crouch { right: 270px; bottom: 182px; width: 130px; height: 100px; }
-.touch-aim { right: 76px; bottom: 286px; width: 150px; height: 100px; }
-.touch-use { right: 250px; bottom: 304px; width: 170px; height: 100px; }
-.touch-trick { right: 444px; bottom: 304px; width: 130px; height: 100px; }
+.touch-fire-left { left: 60px; bottom: 450px; width: 130px; height: 120px; }
+.touch-jump { right: 40px; bottom: 310px; width: 140px; height: 110px; }
+.touch-aim { right: 270px; bottom: 160px; width: 140px; height: 130px; }
+.touch-crouch { right: 240px; bottom: 26px; width: 160px; height: 100px; }
+.touch-use { right: 220px; bottom: 320px; width: 200px; height: 110px; border-color: rgb(255, 200, 60); background-color: rgba(60, 40, 0, 0.45); }
+.touch-use .touch-label { color: rgb(255, 215, 90); }
+.touch-trick { right: 440px; bottom: 320px; width: 140px; height: 110px; }
+
+/* «замок» бега над джойстиком: довести палец — бег фиксируется */
+.touch-sprint-lock {
+    position: absolute;
+    width: 120px;
+    height: 56px;
+    align-items: center;
+    justify-content: center;
+    border-width: 3px;
+    border-color: rgba(255, 255, 255, 0.5);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+.touch-sprint-lock .touch-label { font-size: 12px; }
+
+/* нажатая — поверх цветов отдельных кнопок («Действие», «замок» бега) */
+.touch-btn.touch-pressed, .touch-sprint-lock.touch-pressed { background-color: rgba(232, 197, 71, 0.6); border-color: rgb(255, 255, 255); }
 .touch-pause { left: 24px; top: 24px; width: 90px; height: 70px; }
 .touch-score { left: 130px; top: 24px; width: 120px; height: 70px; }
 

@@ -21,7 +21,10 @@ namespace RocketWars.Core
         public const int MouseLeft = -1, MouseRight = -2, MouseMiddle = -3, MouseBack = -4, MouseForward = -5;
 
         const string BindPrefix = "bind.";
-        const string SensitivityKey = "mouseSensitivity";
+        public const string MouseSensitivityKey = "mouseSensitivity", TouchSensitivityKey = "touchSensitivity";
+
+        /// <summary>У пальца своя чувствительность: в Telegram настройки общие для телефона и ПК (облако).</summary>
+        static string SensitivityKey => TouchInput.Enabled ? TouchSensitivityKey : MouseSensitivityKey;
         public const float MinSensitivity = 0.1f, MaxSensitivity = 4f;
 
         static readonly int[] Defaults =
@@ -141,6 +144,7 @@ namespace RocketWars.Core
         {
             _binds = null;
             _sensitivity = null;
+            TouchInput.ReloadSaved();
         }
 
         public static void ResetAll()

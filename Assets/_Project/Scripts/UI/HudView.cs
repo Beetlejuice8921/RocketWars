@@ -424,15 +424,17 @@ namespace RocketWars.UI
             var revive = _revive;
             var interactor = PlayerInteractor.Local;
             string prompt = "";
-            bool showProgress = false;
+            bool showProgress = false, useContext = false; // useContext — на телефоне показать кнопку «Действие»
             if (revive != null && revive.Target != null)
             {
+                useContext = true;
                 prompt = revive.IsReviving ? Loc.F("Поднимаем {0}…", revive.Target.DisplayName) : Loc.F("Удерживайте {use} — поднять {0}", revive.Target.DisplayName);
                 showProgress = true;
                 _progressFill.style.width = Length.Percent(revive.Progress01 * 100f);
             }
             else if (me != null && _rider is RocketRider rider && (rider.IsRiding || rider.HasGrabTarget))
             {
+                useContext = rider.IsRiding || !rider.TargetFull;
                 prompt = rider.InFlight ? Loc.T("Отпустите {use} — спрыгнуть · {trick} — трюк")
                     : rider.IsRiding ? Loc.T("Отпустите {use} — спрыгнуть")
                     : rider.TargetFull ? Loc.T("На ракете нет места (4 из 4)")
@@ -448,15 +450,18 @@ namespace RocketWars.UI
                 if (crate.State == CrateState.Closed)
                 {
                     prompt = crates.IsOpening ? Loc.T("Открываем ящик…") : Loc.T("Удерживайте {use} — открыть ящик");
+                    useContext = true;
                     showProgress = true;
                     _progressFill.style.width = Length.Percent(crates.Progress01 * 100f);
                 }
                 else if (crate.HasItem)
                 {
                     prompt = Loc.F("{use} - взять: {0}", LootName(crate.Kind));
+                    useContext = true;
                 }
                 else
                 {
+                    useContext = crate.Medkits > 0 && (health == null || health.Hp < PlayerHealth.MaxHp);
                     prompt = health != null && health.Hp >= PlayerHealth.MaxHp
                         ? Loc.F("Аптечек в ящике: {0} · здоровье полное", crate.Medkits)
                         : Loc.F("{use} — аптечка +{0} HP (в ящике: {1})", LootCrate.MedkitHeal.ToString("0"), crate.Medkits);
@@ -465,6 +470,7 @@ namespace RocketWars.UI
             else if (me != null && _flags is FlagInteraction flags && flags.Target != null)
             {
                 prompt = Loc.F("{use} - забрать флаг {0}", RuntimeMaterials.TeamNameGenitive(flags.Target.Team));
+                useContext = true;
             }
             else if (interactor != null && interactor.Hovered != null)
             {
@@ -476,6 +482,7 @@ namespace RocketWars.UI
                     : Loc.F("{0} недоступна", name);
             }
             _prompt.text = prompt;
+            TouchInput.UseContext = useContext;
             Ui.Show(_progress, showProgress);
             UpdateHelmet(me, health);
 
