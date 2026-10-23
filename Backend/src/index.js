@@ -2,7 +2,7 @@
 // Хост в комнате — обычный игрок, поэтому одному его слову не верим: итог матча засчитывается, только когда
 // отчёты нескольких настоящих игроков (аккаунты площадки) совпали. Подробности — Backend/README.md.
 
-import { CORS, HttpError, json, now, body, requireToken, readToken, signToken, cleanName, randomId, hmac, sha256, hex, timingSafeEqual } from './common.js';
+import { CORS, HttpError, json, now, body, requireToken, readToken, signToken, cleanName, randomId, hmac, sha256, hex, timingSafeEqual, statDay } from './common.js';
 import * as bot from './bot.js';
 
 const WINS_NEEDED = 4;              // MatchManager.WinsNeeded; стрим-комната — до 1–4 побед (поле wins отчёта)
@@ -87,6 +87,8 @@ async function auth(request, env) {
     .bind(provider, extId, name, verified, t).run();
   const player = await env.DB.prepare('SELECT id, name, verified FROM players WHERE provider = ?1 AND ext_id = ?2')
     .bind(provider, extId).first();
+  await env.DB.prepare('INSERT OR IGNORE INTO player_days (day, player_id) VALUES (?1, ?2)')
+    .bind(statDay(t), player.id).run();
   const token = await signToken({ p: player.id, v: player.verified, e: t + TOKEN_TTL_SEC }, env.TOKEN_SECRET);
   return json({
     token, playerId: player.id, verified: player.verified === 1, ranked: isRanked(player.verified, env),

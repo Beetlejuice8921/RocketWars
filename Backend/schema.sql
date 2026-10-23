@@ -12,6 +12,13 @@ CREATE TABLE IF NOT EXISTS players (
   UNIQUE (provider, ext_id)
 );
 
+-- в какие дни игрок заходил в игру (вход — при запуске): для /stats бота
+CREATE TABLE IF NOT EXISTS player_days (
+  day       TEXT    NOT NULL,             -- 'YYYY-MM-DD' по Москве
+  player_id INTEGER NOT NULL,
+  PRIMARY KEY (day, player_id)
+);
+
 -- матч, который хост зарегистрировал при старте; итог принимается, когда отчёты игроков сходятся
 CREATE TABLE IF NOT EXISTS matches (
   id          TEXT    PRIMARY KEY,

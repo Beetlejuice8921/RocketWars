@@ -113,9 +113,14 @@ namespace RocketWars.Online
         {
             if (!await EnsureAuth())
                 return null;
-            var (ok, text) = await Send("POST", "/v1/match/start", JsonUtility.ToJson(new StartRequest { platform = GamePlatform.Current.Id }), true);
+            var (ok, text) = await Send("POST", "/v1/match/start", JsonUtility.ToJson(new StartRequest { platform = MatchPlatform }), true);
             return ok ? JsonUtility.FromJson<StartResponse>(text).matchId : null;
         }
+
+        /// <summary>Площадка матча для статистики (/stats бота): редактор и dev-сборки помечены, чтобы тесты не путались с игроками.</summary>
+        static string MatchPlatform => Application.isEditor ? "editor"
+            : Debug.isDebugBuild ? GamePlatform.Current.Id + "-dev"
+            : GamePlatform.Current.Id;
 
         public static async Task<MatchResult> Report(MatchReport report)
         {

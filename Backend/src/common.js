@@ -21,6 +21,13 @@ export function json(data, status = 200) {
 
 export const now = () => Math.floor(Date.now() / 1000);
 
+// сутки статистики (/stats бота) — по Москве
+const STAT_TZ_SEC = 3 * 3600;
+/** Начало суток (unix, с), отстоящих на back дней от суток момента t. */
+export const statDayStart = (t, back = 0) => (Math.floor((t + STAT_TZ_SEC) / 86400) - back) * 86400 - STAT_TZ_SEC;
+/** День 'YYYY-MM-DD' (по Москве) — ключ player_days. */
+export const statDay = t => new Date((t + STAT_TZ_SEC) * 1000).toISOString().slice(0, 10);
+
 export async function body(request) {
   try { return await request.json(); }
   catch { throw new HttpError(400, 'bad_json'); }

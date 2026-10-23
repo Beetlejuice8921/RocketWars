@@ -6,7 +6,7 @@
 // • Когда стрим закрыт (или игра стримера пропала), каждому сыгравшему — итоги и скин-награда «Зритель стрима».
 // Подробности — Backend/README.md.
 
-import { HttpError, json, now, body, requireToken, cleanName, randomId, timingSafeEqual } from './common.js';
+import { HttpError, json, now, body, requireToken, cleanName, randomId, timingSafeEqual, statDay, statDayStart } from './common.js';
 
 const APP_URL = 'https://t.me/RocketWarsGameBot/play';
 export const STREAM_SKIN = 3;                // Core/Skins: «Зритель стрима»
@@ -189,11 +189,8 @@ async function command(env, msg) {
         ? list.results.map(s => `• ${esc(s.name)} — <code>${s.tg_id}</code> ${esc(s.channel_url)}`).join('\n')
         : 'Стримеров пока нет. /streamer_add &lt;tg_id&gt; &lt;ссылка&gt; &lt;имя&gt;');
     }
-    case '/stats': {
-      const s = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(active) AS a FROM subscribers').first();
-      const q = await env.DB.prepare('SELECT COUNT(*) AS n FROM outbox').first();
-      return reply(env, chat, `Подписчиков: ${s.a || 0} активных из ${s.n}\nВ очереди на отправку: ${q.n}`);
-    }
+    case '/stats':
+      return reply(env, chat, await statsText(env));
     // /broadcast <текст> — всем активным подписчикам (с кнопкой «Играть»)
     case '/broadcast': {
       const text = msg.text.trim().slice(cmdRaw.length).trim();
@@ -203,6 +200,52 @@ async function command(env, msg) {
       return reply(env, chat, `Поставлено в очередь: ${n}`);
     }
   }
+}
+
+// ---------- /stats ----------
+
+// колонки: сегодня, 7 дней, 30 дней (сутки по Москве), всё время; ?1..?3 — начала периодов
+const periodSums = col => `SUM(${col} >= ?1) AS p0, SUM(${col} >= ?2) AS p1, SUM(${col} >= ?3) AS p2, COUNT(*) AS p3`;
+const periodDistinct = (col, id) => [1, 2, 3].map(i => `COUNT(DISTINCT CASE WHEN ${col} >= ?${i} THEN ${id} END) AS p${i - 1}`).join(', ') +
+  `, COUNT(DISTINCT ${id}) AS p3`;
+const periods = row => [0, 1, 2, 3].map(i => row[`p${i}`] || 0).join(' / ');
+
+async function statsText(env) {
+  const t = now();
+  const since = [0, 6, 29].map(back => statDayStart(t, back));
+  const q = (sql, ...args) => env.DB.prepare(sql).bind(...args);
+  const [visits, fresh, played, matches, multi, platforms, subs, outbox] = (await env.DB.batch([
+    q(`SELECT ${periodDistinct('day', 'player_id')} FROM player_days`, ...since.map(statDay)),
+    q(`SELECT ${periodSums('created_at')} FROM players`, ...since),
+    q(`SELECT ${periodDistinct('t', 'p')} FROM (SELECT host_id AS p, created_at AS t FROM matches
+         UNION ALL SELECT player_id, created_at FROM match_reports)`, ...since),
+    q(`SELECT ${periodSums('created_at')} FROM matches`, ...since),
+    // хотя бы два отчёта — играли живые люди, а не один игрок с ботами
+    q(`SELECT ${periodSums('t')} FROM (SELECT MIN(created_at) AS t FROM match_reports GROUP BY match_id HAVING COUNT(*) >= 2)`, ...since),
+    q('SELECT platform, COUNT(*) AS n FROM matches WHERE created_at >= ?1 GROUP BY platform ORDER BY n DESC', since[2]),
+    q('SELECT COUNT(*) AS n, SUM(active) AS a FROM subscribers'),
+    q('SELECT COUNT(*) AS n FROM outbox'),
+  ])).map(r => r.results);
+  // редактор и dev-сборки (RatingApi.MatchPlatform) — тесты, а не площадка
+  const isTest = p => p === 'editor' || /-dev$/.test(p);
+  const tests = platforms.filter(p => isTest(p.platform)).reduce((n, p) => n + p.n, 0);
+  const byPlatform = [
+    ...platforms.filter(p => !isTest(p.platform)).map(p => `${esc(p.platform || '?')} ${p.n}`),
+    ...(tests ? [`тесты (редактор, dev-сборки) ${tests}`] : []),
+  ].join(' · ') || '—';
+  return [
+    '📊 <b>Статистика</b>: сегодня / 7 дней / 30 дней / всего (сутки по Москве)',
+    '',
+    `👥 Заходили в игру: ${periods(visits[0])}`,
+    `🆕 Новых игроков: ${periods(fresh[0])}`,
+    `🎮 Сыграли матч: ${periods(played[0])}`,
+    `⚔️ Матчей: ${periods(matches[0])}`,
+    `🤝 Из них с живыми соперниками: ${periods(multi[0])}`,
+    `🖥 Матчи по площадкам за 30 дней: ${byPlatform}`,
+    '',
+    `Подписчиков: ${subs[0].a || 0} активных из ${subs[0].n}`,
+    `В очереди на отправку: ${outbox[0].n}`,
+  ].join('\n');
 }
 
 async function streamList(env, chat, L, silentIfEmpty) {

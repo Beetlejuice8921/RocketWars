@@ -212,5 +212,14 @@ check('rating: match to 2 wins accepted, points halved (10 base → 5)', r2.data
 const badWins = await call('POST', '/v1/match/report', { ...rep(1), wins: 2, score0: 4 }, a.token);
 check('rating: score above wins rejected', badWins.status === 400, badWins);
 
+// /stats после матча: заходы, матч и матч с живыми соперниками попали в «сегодня»
+await call('POST', '/v1/match/start', { platform: 'editor' }, b.token);
+await hook(admin, '/stats');
+const stats = last(ADMIN)?.text || '';
+const today = label => Number((stats.match(new RegExp(label + ': (\\d+) / ')) || [])[1] || 0);
+check('admin: /stats counts players and matches today',
+  today('Заходили в игру') >= 2 && today('Сыграли матч') >= 2 && today('Матчей') >= 1 && today('Из них с живыми соперниками') >= 1 &&
+  /telegram \d+/.test(stats) && /тесты \(редактор, dev-сборки\) 1/.test(stats) && !/editor/.test(stats), stats);
+
 console.log(`\n${ok} checks passed`);
 mock.close();
