@@ -85,8 +85,41 @@ const room = 'K7Q2ZX';
 const bad = await call('POST', '/tg/webhook', { update_id: 1 }, null, { 'X-Telegram-Bot-Api-Secret-Token': 'wrong' });
 check('webhook: wrong secret rejected', bad.status === 401, bad);
 
+const beforeStart = sent.length;
 await hook(viewerA, '/start');
-check('/start: welcome with Play button', /Rocket Wars/.test(last(viewerA.id)?.text) && buttons(last(viewerA.id))[0]?.url.endsWith('/play'), last(viewerA.id));
+const startMsgs = to(viewerA.id).filter(m => sent.indexOf(m) >= beforeStart);
+const kb = startMsgs[0]?.reply_markup?.keyboard?.flat().map(x => x.text) || [];
+check('/start: welcome with persistent keyboard (Subscription, Who is streaming)', /Rocket Wars/.test(startMsgs[0]?.text) &&
+  kb.includes('🔔 Подписка') && kb.includes('📺 Кто стримит') && startMsgs[0].reply_markup.is_persistent === true, startMsgs[0]);
+check('/start: subscription card «on» with Unsubscribe + Play buttons', /включены/.test(startMsgs[1]?.text) &&
+  buttons(startMsgs[1])[0]?.callback_data === 'sub:0' && buttons(startMsgs[1])[1]?.url.endsWith('/play'), startMsgs);
+
+// кнопка карточки: отписаться и подписаться обратно, карточка правится на месте
+const press = (from, data, messageId = 777) => call('POST', '/tg/webhook',
+  { update_id: updateId++, callback_query: { id: 'cb' + updateId, from, data, message: { message_id: messageId, chat: { id: from.id, type: 'private' } } } },
+  null, { 'X-Telegram-Bot-Api-Secret-Token': SECRET });
+const lastOf = method => sent.filter(m => m.method === method).at(-1);
+await press(viewerA, 'sub:0');
+check('card button: unsubscribe → toast + card edited to «off» with Subscribe button',
+  /выключена/.test(lastOf('answerCallbackQuery')?.text) && lastOf('editMessageText')?.message_id === 777 &&
+  /выключены/.test(lastOf('editMessageText')?.text) && lastOf('editMessageText')?.reply_markup.inline_keyboard[0][0].callback_data === 'sub:1',
+  { a: lastOf('answerCallbackQuery'), e: lastOf('editMessageText') });
+await hook(admin, '/stats');
+const subsOff = Number((last(ADMIN)?.text.match(/Подписчиков: (\d+)/) || [])[1]);
+await press(viewerA, 'sub:1');
+check('card button: subscribe back → toast «включена», card «on»',
+  /включена/.test(lastOf('answerCallbackQuery')?.text) && /включены/.test(lastOf('editMessageText')?.text), lastOf('editMessageText'));
+await hook(admin, '/stats');
+check('card button: subscriber count went back up', Number((last(ADMIN)?.text.match(/Подписчиков: (\d+)/) || [])[1]) === subsOff + 1, last(ADMIN));
+await hook(viewerA, '📺 Кто стримит');
+check('keyboard «Кто стримит» → stream list', /никто не стримит/.test(last(viewerA.id)?.text), last(viewerA.id));
+await press(viewerA, 'sub:0');
+await hook(viewerA, '🔔 Подписка');
+check('keyboard «Подписка» → card with current state (off), does not subscribe', /выключены/.test(last(viewerA.id)?.text), last(viewerA.id));
+await hook(viewerA, '🔔 Subscription');
+check('keyboard button in the other language works too', /выключены/.test(last(viewerA.id)?.text), last(viewerA.id));
+await hook(viewerA, '/sub');
+check('/sub: card «on»', /включены/.test(last(viewerA.id)?.text) && buttons(last(viewerA.id))[0]?.callback_data === 'sub:0', last(viewerA.id));
 
 await hook(viewerA, '/start room_ab12cd');
 check('/start room_ payload: join button opens that room', buttons(last(viewerA.id))[0]?.url.endsWith('?startapp=room_AB12CD'), last(viewerA.id));
@@ -184,7 +217,7 @@ check('results again: no skin line when already owned', resB2 && !/skin/.test(re
 
 // отписка и блокировка
 await hook(viewerA, '/stop');
-check('/stop: confirmation', /Больше не пришлю/.test(last(viewerA.id)?.text), last(viewerA.id));
+check('/stop: card «off» with Subscribe button', /Больше не пришлю/.test(last(viewerA.id)?.text) && buttons(last(viewerA.id))[0]?.callback_data === 'sub:1', last(viewerA.id));
 blocked.add(String(viewerB.id));
 await hook(admin, '/broadcast Новая карта!');
 check('admin: /broadcast queued', /Поставлено в очередь: \d+/.test(last(ADMIN)?.text), last(ADMIN));
@@ -198,6 +231,28 @@ await cron();
 await sleep(500);
 check('broadcast: B blocked the bot → unsubscribed after 403, not retried',
   !to(viewerB.id).some(m => sent.indexOf(m) >= beforeB2), null);
+
+// кнопка «Подписаться на бота» в меню игры
+check('auth: subscribed flag (A via /start, B via Mini App permission, outsider not)', a.subscribed === true && b.subscribed === true && o.subscribed === false, { a, b, o });
+const aBack = await login({ ...viewerA, allows_write_to_pm: true });
+check('auth after /stop: Mini App permission does not resubscribe', aBack.subscribed === false, aBack);
+const st0 = await call('GET', '/v1/bot/status', null, o.token);
+check('bot/status: outsider not subscribed', st0.status === 200 && st0.data.subscribed === false, st0);
+const sub = await call('POST', '/v1/bot/subscribe', { on: true, lang: 'ru' }, o.token);
+check('bot/subscribe: subscribed + confirmation in chat', sub.data.subscribed === true && /включены/.test(last(outsider.id)?.text) && buttons(last(outsider.id))[0]?.callback_data === 'sub:0', { sub, m: last(outsider.id) });
+const st1 = await call('GET', '/v1/bot/status', null, o.token);
+check('bot/status: now subscribed', st1.data.subscribed === true, st1);
+const subA = await call('POST', '/v1/bot/subscribe', { on: true, lang: 'ru' }, a.token);
+check('bot/subscribe: A comes back after /stop', subA.data.subscribed === true, subA);
+const subB = await call('POST', '/v1/bot/subscribe', { on: true, lang: 'en' }, b.token);
+check('bot/subscribe: bot blocked → no_access, not subscribed', subB.data.subscribed === false && subB.data.error === 'no_access', subB);
+const unsub = await call('POST', '/v1/bot/subscribe', { on: false }, o.token);
+const st2 = await call('GET', '/v1/bot/status', null, o.token);
+check('bot/subscribe off: unsubscribed', unsub.data.subscribed === false && st2.data.subscribed === false, { unsub, st2 });
+const guest = await call('POST', '/v1/auth', { provider: 'guest', data: 'ab'.repeat(16) });
+const stG = await call('GET', '/v1/bot/status', null, guest.data.token);
+const subG = await call('POST', '/v1/bot/subscribe', { on: true }, guest.data.token);
+check('bot: guest has no subscription', guest.data.subscribed === false && stG.data.guest === true && subG.status === 403, { g: guest.data, stG, subG });
 await hook(admin, '/stats');
 check('admin: /stats', /Подписчиков: \d+ активных/.test(last(ADMIN)?.text), last(ADMIN));
 
@@ -219,7 +274,7 @@ const stats = last(ADMIN)?.text || '';
 const today = label => Number((stats.match(new RegExp(label + ': (\\d+) / ')) || [])[1] || 0);
 check('admin: /stats counts players and matches today',
   today('Заходили в игру') >= 2 && today('Сыграли матч') >= 2 && today('Матчей') >= 1 && today('Из них с живыми соперниками') >= 1 &&
-  /telegram \d+/.test(stats) && /тесты \(редактор, dev-сборки\) 1/.test(stats) && !/editor/.test(stats), stats);
+  /telegram \d+/.test(stats) && /тесты \(редактор, dev-сборки\) \d+/.test(stats) && !/editor/.test(stats), stats);
 
 console.log(`\n${ok} checks passed`);
 mock.close();

@@ -128,6 +128,20 @@ namespace RocketWars.Core
             return false;
         }
 
+        /// <summary>Кнопка «Подписаться на бота» (Telegram): бот присылает анонсы стримов и итоги.</summary>
+        public virtual bool HasBot => false;
+
+        /// <summary>
+        /// Спросить у площадки разрешение боту писать игроку. onDone(true) — разрешил (или уже было), false — отказал,
+        /// null — площадка так не умеет (старый Telegram): игра открыла чат с ботом, подписка — его кнопкой «Старт».
+        /// </summary>
+        public virtual void RequestBotMessages(Action<bool?> onDone) => onDone?.Invoke(null);
+
+        /// <summary>Игрок вернулся в игру (Telegram был свёрнут, вкладка скрыта): состояние снаружи могло измениться.</summary>
+        public static event Action Resumed;
+
+        protected static void RaiseResumed() => Resumed?.Invoke();
+
         /// <summary>Игра загрузилась и готова к игре (Яндекс: LoadingAPI.ready).</summary>
         public virtual void GameReady() { }
 

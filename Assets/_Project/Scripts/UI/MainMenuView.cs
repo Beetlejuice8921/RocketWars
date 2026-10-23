@@ -23,6 +23,7 @@ namespace RocketWars.UI
         readonly ScrollView _list;
         readonly Label _status;
         readonly Button _joinCode;
+        readonly BotButton _bot;
         Label[] _codeCells;
         bool _codeFocused, _codeError, _joiningByCode;
         readonly List<Button> _actions = new List<Button>();
@@ -47,10 +48,12 @@ namespace RocketWars.UI
             var panel = Ui.El(column, "panel", "menu-panel");
             Ui.LangFont(title, Lang.En); // название игры — всегда Press Start 2P
 
-            // под панелью: слева столбик кнопок, справа (вровень с «Рейтингом») — «Как играть?»
+            // под панелью: слева столбик кнопок, справа (вровень с «Рейтингом») — «Как играть?», под ней — подписка на бота
             var bottom = Ui.El(column, "menu-bottom");
             var side = Ui.El(bottom, "menu-side");
-            Ui.Btn(bottom, Loc.T("Как играть?"), () => UiRoot.Instance?.OpenHowToPlay(), "menu-side-btn", "menu-howto-btn");
+            var right = Ui.El(bottom, "menu-right");
+            Ui.Btn(right, Loc.T("Как играть?"), () => UiRoot.Instance?.OpenHowToPlay(), "menu-side-btn", "menu-howto-btn");
+            _bot = new BotButton(right);
             Ui.Btn(side, Loc.T("Рейтинг"), () => UiRoot.Instance?.OpenLeaderboard(), "btn-primary", "menu-side-btn");
             Ui.Btn(side, Loc.T("Опции"), () => UiRoot.Instance?.OpenOptions(), "menu-side-btn");
             if (GamePlatform.Current.SupportUrl != null)
@@ -113,6 +116,7 @@ namespace RocketWars.UI
                     GamePlatform.Current.GameReady();
                 }
                 Lan?.StartListening();
+                _bot.OnShown();
                 _status.text = NetworkBootstrap.LastMessage ?? "";
                 if (Net != null)
                     _name.SetValueWithoutNotify(Net.PlayerName);
@@ -129,6 +133,7 @@ namespace RocketWars.UI
             foreach (var b in _actions)
                 b.SetEnabled(!_busy);
             _joinCode.SetEnabled(!_busy && _code.value.Length == CodeLength);
+            _bot.Update();
 
             // игру открыли по приглашению друга — сразу в его комнату (код виден в клетках, при ошибке они покраснеют)
             if (!_busy && Net != null && GamePlatform.Current.IsInitialized && GamePlatform.Current.TakeInviteCode() is string invite)

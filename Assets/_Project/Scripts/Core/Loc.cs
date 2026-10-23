@@ -30,6 +30,9 @@ namespace RocketWars.Core
 
         public static int Count => Codes.Length;
 
+        /// <summary>Код текущего языка (ru, en, pt-BR…) — для сервера (язык сообщений бота).</summary>
+        public static string CurrentCode => Codes[(int)Current];
+
         /// <summary>Хинди без системного шрифта Nirmala UI (браузер) не отрисовать — там его нет в списке.</summary>
         public static bool IsAvailable(Lang lang) => lang != Lang.Hi || GamePlatform.Current.HasSystemFonts;
 

@@ -36,6 +36,8 @@ export default {
         case 'POST /v1/stream/announce': return await bot.streamAnnounce(request, env, ctx);
         case 'POST /v1/stream/close': return await bot.streamClose(request, env, ctx);
         case 'POST /v1/stream/played': return await bot.streamPlayed(request, env);
+        case 'GET /v1/bot/status': return await bot.botStatus(request, env);
+        case 'POST /v1/bot/subscribe': return await bot.botSubscribe(request, env);
         case 'POST /tg/webhook': return await bot.webhook(request, env);
         case 'POST /tg/setup': return await bot.setup(request, env, url);
         default: return json({ error: 'not_found' }, 404);
@@ -67,9 +69,9 @@ async function auth(request, env) {
     extId = String(user.id);
     name = user.first_name || user.username || '';
     verified = 1;
-    // разрешил боту писать (запрос в Mini App) — будет получать анонсы стримов и итоги
+    // уже разрешил боту писать — новый подписчик; отписавшегося (/stop) не возвращаем, для этого кнопка в игре
     if (user.allows_write_to_pm)
-      await bot.subscribe(env, user, 'webapp');
+      await bot.subscribe(env, user, 'webapp', true);
   } else if (provider === 'guest') {
     // ключ устройства: случайные 32+ hex-символа, на сервере храним только хэш
     if (typeof data !== 'string' || !/^[0-9a-f]{32,64}$/.test(data))
@@ -93,6 +95,7 @@ async function auth(request, env) {
   return json({
     token, playerId: player.id, verified: player.verified === 1, ranked: isRanked(player.verified, env),
     skins: await bot.skinsOf(env, player.id), // скины-награды (стримы)
+    subscribed: provider === 'telegram' && await bot.isSubscribed(env, extId), // кнопка «Подписаться на бота» в меню
   });
 }
 

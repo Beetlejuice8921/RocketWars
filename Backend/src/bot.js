@@ -1,5 +1,5 @@
 // Rocket Wars — бот @RocketWarsGameBot и стримы с подписчиками.
-// • Вебхук Telegram (/tg/webhook): /start, /room КОД, /stream, /stop, /id; админу — список стримеров-партнёров и рассылка.
+// • Вебхук Telegram (/tg/webhook): /start, /room КОД, /stream, /sub, /stop, /id и кнопка карточки подписки; админу — список стримеров-партнёров и рассылка.
 // • Игра стримера: открыть стрим (/v1/stream/open, раз в несколько минут — «я ещё тут»), анонс всем подписчикам
 //   (/v1/stream/announce), закрыть (/v1/stream/close). Игроки после каждого матча сообщают своё место (/v1/stream/played).
 // • Сообщения не шлются сразу, а ставятся в outbox: cron раз в минуту отправляет пачку (лимиты Telegram и Cloudflare).
@@ -24,7 +24,15 @@ const ROOM_CODE = /^[A-Z0-9]{6}$/;
 
 const T = {
   ru: {
-    welcome: name => `Привет, ${name}! 🚀 Rocket Wars — ракетные дуэли островов прямо в Telegram.\n\nЯ пришлю анонс, когда стример будет играть с подписчиками, и итоги после стрима.\n\n/stream — кто сейчас стримит\n/room КОД — войти в комнату по коду\n/stop — не присылать анонсы`,
+    welcome: name => `Привет, ${name}! 🚀 Rocket Wars — ракетные дуэли островов прямо в Telegram.\n\n/stream — кто сейчас стримит\n/room КОД — войти в комнату по коду\n/sub — подписаться на анонсы\n/stop — отписаться`,
+    cardOn: '🔔 <b>Анонсы стримов: включены</b>\nПришлю сообщение, когда стример начнёт играть с подписчиками, и итоги после стрима.',
+    cardOff: '🔕 <b>Анонсы стримов: выключены</b>\nБольше не пришлю анонсы. Включить — кнопкой ниже или /sub',
+    kbSub: '🔔 Подписка',
+    kbStreams: '📺 Кто стримит',
+    subscribe: '🔔 Подписаться на анонсы',
+    unsubscribe: '🔕 Отписаться',
+    toastOn: '✅ Подписка включена',
+    toastOff: 'Подписка выключена',
     play: '🚀 Играть',
     joinRoom: code => `🚀 Войти в комнату ${code}`,
     joinStream: name => `🚀 Играть у ${name}`,
@@ -33,7 +41,6 @@ const T = {
     roomUsage: 'Напиши код комнаты из 6 знаков: /room ABC123',
     noStreams: 'Сейчас никто не стримит. Я пришлю анонс, когда начнётся.',
     streams: 'Сейчас играют с подписчиками:',
-    stopped: 'Больше не пришлю анонсы. Вернуться — /start',
     announceNow: (name, watch) => `🔴 <b>${esc(name)}</b> играет в Rocket Wars с подписчиками прямо сейчас!${watch ? '\nСмотри стрим и залетай в комнату — места занимают по очереди.' : '\nЗалетай в комнату — места занимают по очереди.'}`,
     announceSoon: name => `⏰ Через 15 минут <b>${esc(name)}</b> играет в Rocket Wars с подписчиками! Комната уже открыта — можно занять место в очереди.`,
     results: (name, s, newSkin) => `🏁 Стрим у <b>${esc(name)}</b> закончился — спасибо, что играл!\nМатчей: ${s.matches}, побед: ${s.wins}, лучшее место: ${s.best_place}.` +
@@ -41,7 +48,15 @@ const T = {
     id: id => `Твой Telegram ID: <code>${id}</code>`,
   },
   en: {
-    welcome: name => `Hi, ${name}! 🚀 Rocket Wars — rocket duels between islands right in Telegram.\n\nI'll send you a heads-up when a streamer plays with viewers, and the results after the stream.\n\n/stream — who is streaming now\n/room CODE — join a room by code\n/stop — no more announcements`,
+    welcome: name => `Hi, ${name}! 🚀 Rocket Wars — rocket duels between islands right in Telegram.\n\n/stream — who is streaming now\n/room CODE — join a room by code\n/sub — subscribe to announcements\n/stop — unsubscribe`,
+    cardOn: '🔔 <b>Stream announcements: on</b>\nI will message you when a streamer starts playing with viewers, and send the results after the stream.',
+    cardOff: '🔕 <b>Stream announcements: off</b>\nNo more announcements. Turn them on with the button below or /sub',
+    kbSub: '🔔 Subscription',
+    kbStreams: '📺 Who is streaming',
+    subscribe: '🔔 Subscribe to announcements',
+    unsubscribe: '🔕 Unsubscribe',
+    toastOn: '✅ Subscribed',
+    toastOff: 'Unsubscribed',
     play: '🚀 Play',
     joinRoom: code => `🚀 Join room ${code}`,
     joinStream: name => `🚀 Play with ${name}`,
@@ -50,7 +65,6 @@ const T = {
     roomUsage: 'Send a 6-character room code: /room ABC123',
     noStreams: 'Nobody is streaming right now. I will let you know when it starts.',
     streams: 'Playing with viewers right now:',
-    stopped: 'No more announcements. To come back — /start',
     announceNow: (name, watch) => `🔴 <b>${esc(name)}</b> is playing Rocket Wars with viewers right now!${watch ? '\nWatch the stream and jump into the room — players take turns.' : '\nJump into the room — players take turns.'}`,
     announceSoon: name => `⏰ In 15 minutes <b>${esc(name)}</b> plays Rocket Wars with viewers! The room is already open — grab a spot in the queue.`,
     results: (name, s, newSkin) => `🏁 The stream by <b>${esc(name)}</b> is over — thanks for playing!\nMatches: ${s.matches}, wins: ${s.wins}, best place: ${s.best_place}.` +
@@ -69,6 +83,10 @@ function esc(s) {
 const appUrl = env => env.APP_URL || APP_URL;
 const roomUrl = (env, code) => `${appUrl(env)}?startapp=room_${code}`;
 const keyboard = rows => JSON.stringify({ inline_keyboard: rows.filter(r => r.length) });
+/** Постоянные кнопки под полем ввода (вместо набора команд); нажатие присылает их текст — см. KB_ACTIONS. */
+const replyKeyboard = L => JSON.stringify({ keyboard: [[{ text: L.kbSub }, { text: L.kbStreams }]], resize_keyboard: true, is_persistent: true });
+// текст кнопки на любом языке → команда (язык Telegram у игрока мог смениться после /start)
+const KB_ACTIONS = new Map(Object.values(T).flatMap(L => [[L.kbSub, '/status'], [L.kbStreams, '/stream']]));
 
 // ---------- Telegram ----------
 
@@ -91,19 +109,71 @@ function reply(env, chatId, text, markup) {
   return tg(env, 'sendMessage', payload);
 }
 
+/** Карточка подписки в чате: состояние и кнопка «Подписаться» / «Отписаться» (нажатие правит эту же карточку). */
+const subCard = (env, L, on) => ({
+  text: on ? L.cardOn : L.cardOff,
+  markup: keyboard([[{ text: on ? L.unsubscribe : L.subscribe, callback_data: on ? 'sub:0' : 'sub:1' }], [{ text: L.play, url: appUrl(env) }]]),
+});
+
+function sendCard(env, chat, L, on) {
+  const card = subCard(env, L, on);
+  return reply(env, chat, card.text, card.markup);
+}
+
 const adminIds = env => String(env.ADMIN_IDS || '').split(/[\s,]+/).filter(Boolean);
 
-/** Подписчик: нажал /start или разрешил писать из Mini App. Язык обновляется при каждом заходе. */
-export async function subscribe(env, user, source) {
+/**
+ * Подписчик: нажал /start или кнопку «Подписаться» в игре. Язык обновляется при каждом заходе.
+ * onlyNew — вход в Mini App с разрешением писать: новых подписываем, а отписавшегося (/stop) не возвращаем.
+ */
+export async function subscribe(env, user, source, onlyNew = false) {
   const t = now();
   await env.DB.prepare(
     `INSERT INTO subscribers (tg_id, name, lang, active, source, created_at, updated_at) VALUES (?1, ?2, ?3, 1, ?4, ?5, ?5)
-     ON CONFLICT (tg_id) DO UPDATE SET name = excluded.name, lang = excluded.lang, active = 1, updated_at = excluded.updated_at`)
-    .bind(String(user.id), cleanName(user.first_name || user.username || ''), langOf(user.language_code), source, t).run();
+     ON CONFLICT (tg_id) DO UPDATE SET name = excluded.name, lang = excluded.lang,
+       active = CASE WHEN ?6 = 1 THEN active ELSE 1 END, updated_at = excluded.updated_at`)
+    .bind(String(user.id), cleanName(user.first_name || user.username || ''), langOf(user.language_code), source, t, onlyNew ? 1 : 0).run();
 }
 
 async function unsubscribe(env, tgId) {
   await env.DB.prepare('UPDATE subscribers SET active = 0, updated_at = ?2 WHERE tg_id = ?1').bind(String(tgId), now()).run();
+}
+
+export async function isSubscribed(env, tgId) {
+  const s = await env.DB.prepare('SELECT active FROM subscribers WHERE tg_id = ?1').bind(String(tgId)).first();
+  return !!s && s.active === 1;
+}
+
+// ---------- подписка из игры ----------
+
+/** Кнопка в меню игры: состояние подписки (гость — guest: true, кнопки у него нет). */
+export async function botStatus(request, env) {
+  const tgId = await tgIdOf(env, await requireToken(request, env));
+  return json(tgId ? { subscribed: await isSubscribed(env, tgId) } : { guest: true, subscribed: false });
+}
+
+/**
+ * Кнопка «Подписаться» / «Отписаться» (игра уже спросила у Telegram разрешение писать — requestWriteAccess).
+ * Подписка подтверждается сообщением в чат с ботом: Telegram отказал (403) — писать боту нельзя, подписки нет (no_access).
+ */
+export async function botSubscribe(request, env) {
+  const tgId = await tgIdOf(env, await requireToken(request, env));
+  if (!tgId)
+    throw new HttpError(403, 'guest');
+  const b = await body(request);
+  const lang = langOf(b.lang);
+  if (!b.on) {
+    await unsubscribe(env, tgId);
+    return json({ subscribed: false });
+  }
+  const p = await env.DB.prepare(`SELECT name FROM players WHERE provider = 'telegram' AND ext_id = ?1`).bind(tgId).first();
+  await subscribe(env, { id: tgId, first_name: p ? p.name : '', language_code: lang }, 'game');
+  const sent = await sendCard(env, tgId, T[lang], true); // подтверждение в чат — та же карточка с кнопкой «Отписаться»
+  if (!sent.data.ok && (sent.status === 403 || sent.status === 400)) {
+    await unsubscribe(env, tgId);
+    return json({ subscribed: false, error: 'no_access' });
+  }
+  return json({ subscribed: true });
 }
 
 // ---------- вебхук ----------
@@ -123,18 +193,41 @@ export async function webhook(request, env) {
     return json({ ok: true });
   }
 
+  const cb = update.callback_query;
+  if (cb && cb.from && cb.message && cb.message.chat && cb.message.chat.type === 'private') {
+    await callback(env, cb);
+    return json({ ok: true });
+  }
+
   const msg = update.message;
   if (msg && msg.chat && msg.chat.type === 'private' && typeof msg.text === 'string' && msg.from)
     await command(env, msg);
   return json({ ok: true }); // Telegram ждёт 200, иначе будет повторять
 }
 
+/** Кнопка карточки подписки: переключить и обновить карточку на месте; всплывающая подсказка — итог. */
+async function callback(env, cb) {
+  const L = T[langOf(cb.from.language_code)];
+  if (cb.data !== 'sub:1' && cb.data !== 'sub:0')
+    return tg(env, 'answerCallbackQuery', { callback_query_id: cb.id });
+  const on = cb.data === 'sub:1';
+  if (on) await subscribe(env, cb.from, 'bot');
+  else await unsubscribe(env, cb.from.id);
+  await tg(env, 'answerCallbackQuery', { callback_query_id: cb.id, text: on ? L.toastOn : L.toastOff });
+  const card = subCard(env, L, on);
+  await tg(env, 'editMessageText', {
+    chat_id: cb.message.chat.id, message_id: cb.message.message_id, text: card.text, parse_mode: 'HTML',
+    reply_markup: JSON.parse(card.markup),
+  });
+}
+
 async function command(env, msg) {
   const user = msg.from;
   const chat = msg.chat.id;
   const L = T[langOf(user.language_code)];
-  const [cmdRaw, ...args] = msg.text.trim().split(/\s+/);
-  const cmd = cmdRaw.toLowerCase().replace(/@\w+$/, '');
+  const text = msg.text.trim();
+  const [cmdRaw, ...args] = text.split(/\s+/);
+  const cmd = KB_ACTIONS.get(text) || cmdRaw.toLowerCase().replace(/@\w+$/, '');
   const admin = adminIds(env).includes(String(user.id));
 
   switch (cmd) {
@@ -144,9 +237,16 @@ async function command(env, msg) {
       const code = payload.startsWith('room_') ? payload.slice(5).toUpperCase() : '';
       if (ROOM_CODE.test(code))
         return reply(env, chat, L.room(code), keyboard([[{ text: L.joinRoom(code), url: roomUrl(env, code) }]]));
-      await reply(env, chat, esc(L.welcome(user.first_name || '')), keyboard([[{ text: L.play, url: appUrl(env) }]]));
+      await reply(env, chat, esc(L.welcome(user.first_name || '')), replyKeyboard(L));
+      await sendCard(env, chat, L, true);
       return streamList(env, chat, L, true);
     }
+    case '/status': // кнопка «🔔 Подписка»: текущее состояние с переключателем
+      return sendCard(env, chat, L, await isSubscribed(env, user.id));
+    case '/sub':
+    case '/subscribe':
+      await subscribe(env, user, 'bot');
+      return sendCard(env, chat, L, true);
     case '/room': {
       const code = (args[0] || '').toUpperCase();
       if (!ROOM_CODE.test(code))
@@ -158,7 +258,7 @@ async function command(env, msg) {
       return streamList(env, chat, L, false);
     case '/stop':
       await unsubscribe(env, user.id);
-      return reply(env, chat, L.stopped);
+      return sendCard(env, chat, L, false);
     case '/id':
       return reply(env, chat, L.id(user.id));
   }
@@ -512,18 +612,20 @@ export async function setup(request, env, url) {
   const hook = await tg(env, 'setWebhook', {
     url: `${url.origin}/tg/webhook`,
     secret_token: env.WEBHOOK_SECRET,
-    allowed_updates: ['message', 'my_chat_member'],
+    allowed_updates: ['message', 'my_chat_member', 'callback_query'],
   });
   const commands = (lang, list) => tg(env, 'setMyCommands', { commands: list, ...(lang ? { language_code: lang } : {}) });
   const ru = [
     { command: 'stream', description: 'Кто сейчас стримит' },
     { command: 'room', description: 'Войти в комнату по коду' },
-    { command: 'stop', description: 'Не присылать анонсы' },
+    { command: 'sub', description: 'Подписаться на анонсы' },
+    { command: 'stop', description: 'Отписаться от анонсов' },
   ];
   const en = [
     { command: 'stream', description: 'Who is streaming now' },
     { command: 'room', description: 'Join a room by code' },
-    { command: 'stop', description: 'No more announcements' },
+    { command: 'sub', description: 'Subscribe to announcements' },
+    { command: 'stop', description: 'Unsubscribe from announcements' },
   ];
   const cmd = await commands('', en);
   const cmdRu = await commands('ru', ru);

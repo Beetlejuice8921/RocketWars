@@ -133,6 +133,20 @@ mergeInto(LibraryManager.library, {
     else window.open(share, '_blank');
   },
 
+  // кнопка «Подписаться на бота»: системное окно Telegram «Разрешить боту писать вам?» (Bot API 6.9).
+  // Ответ — OnWriteAccess("1") разрешил (или разрешение уже было), "0" — отказал; старый Telegram — "-1"
+  RW_RequestWriteAccess: function () {
+    var rw = window.RWPlatform;
+    var send = rw ? rw.send : function () { };
+    if (!rw || !rw.tg || !rw.tg.isVersionAtLeast('6.9')) { send('OnWriteAccess', '-1'); return; }
+    try {
+      rw.tg.requestWriteAccess(function (allowed) { send('OnWriteAccess', allowed ? '1' : '0'); });
+    } catch (e) {
+      console.warn('[RW] requestWriteAccess failed', e);
+      send('OnWriteAccess', '-1');
+    }
+  },
+
   // настройки игрока (JSON) — в облако площадки: VK и Telegram (у Яндекса адрес игры постоянный, PlayerPrefs хватает)
   RW_SavePrefs: function (jsonPtr) {
     var rw = window.RWPlatform;

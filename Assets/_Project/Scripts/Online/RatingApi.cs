@@ -34,6 +34,12 @@ namespace RocketWars.Online
         /// <summary>Вошёл аккаунтом площадки (Telegram), а не гостем: стримы, анонсы и награды — только так.</summary>
         public static bool Verified { get; private set; }
 
+        /// <summary>Подписан на бота Telegram (анонсы стримов, итоги) — кнопка в главном меню.</summary>
+        public static bool BotSubscribed { get; private set; }
+
+        /// <summary>Состояние подписки изменилось (вход, кнопка, проверка после возврата в игру).</summary>
+        public static event Action BotChanged;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
@@ -84,6 +90,7 @@ namespace RocketWars.Online
             Ranked = response.ranked;
             Verified = response.verified;
             Skins.SetUnlocked(response.skins);
+            SetBotSubscribed(response.subscribed);
             Debug.Log($"[RocketWars] rating: signed in as {request.provider} #{response.playerId}, ranked {Ranked}");
             return true;
         }
@@ -192,6 +199,43 @@ namespace RocketWars.Online
             await Send("POST", "/v1/stream/played", JsonUtility.ToJson(new PlayedRequest { roomCode = roomCode, place = place, won = won }), true);
         }
 
+        // ---------- подписка на бота (Backend/src/bot.js) ----------
+
+        static void SetBotSubscribed(bool subscribed)
+        {
+            if (subscribed == BotSubscribed)
+                return;
+            BotSubscribed = subscribed;
+            BotChanged?.Invoke();
+        }
+
+        /// <summary>Перечитать подписку (игрок мог нажать «Старт» или /stop в чате с ботом); false — нет связи.</summary>
+        public static async Task<bool> RefreshBot()
+        {
+            if (!await EnsureAuth() || !Verified)
+                return false;
+            var (ok, text) = await Send("GET", "/v1/bot/status", null, true);
+            if (ok)
+                SetBotSubscribed(JsonUtility.FromJson<BotResponse>(text).subscribed);
+            return ok;
+        }
+
+        /// <summary>
+        /// Подписаться / отписаться. Сервер подтверждает подписку сообщением в чат с ботом.
+        /// error: null — готово, no_access — Telegram не дал боту писать, network — нет связи.
+        /// </summary>
+        public static async Task<string> SetBot(bool on)
+        {
+            if (!await EnsureAuth() || !Verified)
+                return "network";
+            var (ok, text) = await Send("POST", "/v1/bot/subscribe", JsonUtility.ToJson(new BotRequest { on = on, lang = Loc.CurrentCode }), true);
+            if (!ok)
+                return "network";
+            var response = JsonUtility.FromJson<BotResponse>(text);
+            SetBotSubscribed(response.subscribed);
+            return string.IsNullOrEmpty(response.error) ? null : response.error;
+        }
+
         // ---------- HTTP ----------
 
         static async Task<(bool ok, string text)> Send(string method, string path, string json, bool withToken)
@@ -220,7 +264,9 @@ namespace RocketWars.Online
         // ---------- данные (поля — как в JSON сервера) ----------
 
         [Serializable] struct AuthRequest { public string provider, data; }
-        [Serializable] struct AuthResponse { public string token; public long playerId; public bool verified, ranked; public int[] skins; }
+        [Serializable] struct AuthResponse { public string token; public long playerId; public bool verified, ranked; public int[] skins; public bool subscribed; }
+        [Serializable] struct BotRequest { public bool on; public string lang; }
+        [Serializable] struct BotResponse { public bool subscribed; public string error; }
         [Serializable] struct StreamRequest { public string roomCode; }
         [Serializable] struct AnnounceRequest { public string kind; }
         [Serializable] struct PlayedRequest { public string roomCode; public int place; public bool won; }
